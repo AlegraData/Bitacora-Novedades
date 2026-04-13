@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import type { Field, BitacoraRecord, Tag, Role, RecordData, Block } from '@/types'
 import { PersonPicker } from './person-picker'
+import { MultiSelectDropdown } from './multi-select-dropdown'
 
 function uid() { return Math.random().toString(36).slice(2, 10) }
 
@@ -139,37 +140,12 @@ export function RecordEditor({ record, fields, tags, userRole, onSave, onClose }
       case 'multiselect': {
         const selected = Array.isArray(value) ? (value as string[]) : String(value || '').split(',').map((v) => v.trim()).filter(Boolean)
         return (
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, padding: '8px', border: '1px solid #e2e8f0', borderRadius: 8 }}>
-            {fieldTags.map((t) => {
-              const isSelected = selected.includes(t.name)
-              return (
-                <button
-                  key={t.id}
-                  type="button"
-                  onClick={() => {
-                    if (!editable) return
-                    const next = isSelected
-                      ? selected.filter((s) => s !== t.name)
-                      : [...selected, t.name]
-                    setField(field.id, next)
-                  }}
-                  style={{
-                    padding: '3px 10px',
-                    borderRadius: 20,
-                    border: `1.5px solid ${isSelected ? t.color : '#e2e8f0'}`,
-                    background: isSelected ? t.color + '33' : '#fff',
-                    color: isSelected ? '#1a202c' : '#718096',
-                    cursor: editable ? 'pointer' : 'default',
-                    fontSize: 12,
-                    fontWeight: 500,
-                  }}
-                >
-                  {t.name}
-                </button>
-              )
-            })}
-            {fieldTags.length === 0 && <span style={{ color: '#a0aec0', fontSize: 13 }}>Sin opciones definidas</span>}
-          </div>
+          <MultiSelectDropdown
+            options={fieldTags}
+            value={selected}
+            onChange={(v) => setField(field.id, v)}
+            disabled={!editable}
+          />
         )
       }
       case 'person': {

@@ -15,7 +15,8 @@
       "Bash(node -e \"require\\('dotenv'\\).config\\({path:'.env.local'}\\); console.log\\('URL starts:', process.env.DATABASE_URL?.slice\\(0,60\\)\\)\")",
       "Bash(dir \"c:\\\\Users\\\\crist\\\\Documents\\\\Alegra\\\\app bitacora\\\\node_modules\\\\@google\")",
       "WebFetch(domain:generativelanguage.googleapis.com)",
-      "Bash(xargs ls:*)"
+      "Bash(xargs ls:*)",
+      "Bash(xargs grep:*)"
     ]
   }
 }
