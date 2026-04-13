@@ -137,7 +137,7 @@ export function RecordEditor({ record, fields, tags, userRole, onSave, onClose }
           </select>
         )
       case 'multiselect': {
-        const selected = Array.isArray(value) ? value : String(value ?? '').split(',').map(v => v.trim()).filter(Boolean)
+        const selected = Array.isArray(value) ? (value as string[]) : String(value || '').split(',').map((v) => v.trim()).filter(Boolean)
         return (
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, padding: '8px', border: '1px solid #e2e8f0', borderRadius: 8 }}>
             {fieldTags.map((t) => {
@@ -173,7 +173,7 @@ export function RecordEditor({ record, fields, tags, userRole, onSave, onClose }
         )
       }
       case 'person': {
-        const selected = Array.isArray(value) ? value : String(value ?? '').split(',').map(v => v.trim()).filter(Boolean)
+        const selected = Array.isArray(value) ? (value as string[]) : String(value || '').split(',').map((v) => v.trim()).filter(Boolean)
         const personConfig = field.config as { multiple?: boolean } | null
         const max = personConfig?.multiple === false ? 1 : undefined
         return (
