@@ -5,7 +5,7 @@ import type { Field, BitacoraRecord, Tag, FilterState, Role, View, SortConfig } 
 import { saveRecord, deleteRecord } from '@/lib/actions/records'
 import { saveField, deleteField, reorderFields } from '@/lib/actions/fields'
 import { saveTag, deleteTag } from '@/lib/actions/tags'
-import { triggerButtonEmail } from '@/lib/actions/email'
+import { triggerButtonWebhook } from '@/lib/actions/webhook'
 import { saveView, deleteView } from '@/lib/actions/views'
 import { RecordEditor } from './record-editor'
 import { RecordDetail } from './record-detail'
@@ -579,13 +579,18 @@ export function RecordsTable({
     })
   }, [])
 
-  const handleTriggerButton = useCallback(async (recordId: string, fieldId: string) => {
+  const handleTriggerButton = useCallback(async (record: BitacoraRecord, field: Field) => {
     startTransition(async () => {
       try {
-        const result = await triggerButtonEmail(recordId, fieldId)
-        alert(`Correo enviado a: ${result.emails.join(', ')}`)
+        await triggerButtonWebhook(record.id, field.id)
+        const now = new Date().toISOString()
+        setRecords((prev) => prev.map((r) =>
+          r.id === record.id
+            ? { ...r, data: { ...r.data, [field.id]: now } }
+            : r
+        ))
       } catch (e: unknown) {
-        alert('Error al enviar: ' + (e instanceof Error ? e.message : String(e)))
+        alert('Error: ' + (e instanceof Error ? e.message : String(e)))
       }
     })
   }, [])
@@ -1009,18 +1014,35 @@ export function RecordsTable({
                     </td>
                     {visibleFields.map((field) => (
                       <td key={field.id} style={tdStyle}>
-                        {field.type === 'button' ? (
-                          <button
-                            onClick={() => handleTriggerButton(record.id, field.id)}
-                            disabled={isPending}
-                            style={{
-                              padding: '4px 12px', background: '#E0F7F4', color: '#00A888',
-                              border: '1px solid #00C4A0', borderRadius: 6, cursor: 'pointer', fontSize: 12, fontWeight: 500,
-                            }}
-                          >
-                            ⚡ {field.name}
-                          </button>
-                        ) : field.id === titleFieldId ? (
+                        {field.type === 'button' ? (() => {
+                          const wasTriggered = Boolean(record.data[field.id])
+                          return (
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                              <span style={{
+                                display: 'inline-flex', alignItems: 'center', gap: 4,
+                                padding: '3px 8px', borderRadius: 12, fontSize: 11, fontWeight: 600,
+                                background: wasTriggered ? '#dcfce7' : '#f1f5f9',
+                                color: wasTriggered ? '#166534' : '#64748b',
+                                border: `1px solid ${wasTriggered ? '#86efac' : '#e2e8f0'}`,
+                              }}>
+                                {wasTriggered ? '✅ Sí' : '⬜ No'}
+                              </span>
+                              <button
+                                onClick={() => handleTriggerButton(record, field)}
+                                disabled={isPending}
+                                style={{
+                                  padding: '3px 8px', fontSize: 11, fontWeight: 500,
+                                  background: wasTriggered ? '#f8fafc' : '#E0F7F4',
+                                  color: wasTriggered ? '#475569' : '#00A888',
+                                  border: `1px solid ${wasTriggered ? '#e2e8f0' : '#00C4A0'}`,
+                                  borderRadius: 6, cursor: 'pointer', whiteSpace: 'nowrap',
+                                }}
+                              >
+                                {wasTriggered ? '↺ Re-ejecutar' : '⚡ Ejecutar'}
+                              </button>
+                            </div>
+                          )
+                        })() : field.id === titleFieldId ? (
                           <TitleCell record={record} field={field} onClick={() => setDetailRecord(record)} />
                         ) : (
                           <CellValue field={field} value={record.data[field.id]} allTags={tags} />

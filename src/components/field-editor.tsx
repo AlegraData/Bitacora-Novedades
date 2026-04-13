@@ -13,7 +13,7 @@ const FIELD_TYPES = [
   { value: 'person', label: 'Persona', icon: '👤' },
   { value: 'url', label: 'URL', icon: '🔗' },
   { value: 'checkbox', label: 'Checkbox', icon: '☑' },
-  { value: 'button', label: 'Botón / Email', icon: '⚡' },
+  { value: 'button', label: 'Botón', icon: '⚡' },
 ]
 
 const TAG_COLORS = [
@@ -82,7 +82,7 @@ export function FieldEditor({
         isFilterable,
         isVisible,
         config: isButton
-          ? { ...config, action: 'send_email' }
+          ? { ...config, action: 'webhook' }
           : type === 'person'
           ? { multiple: config.multiple !== 'false' }
           : null,
@@ -206,34 +206,33 @@ export function FieldEditor({
             {/* Button config */}
             {isButton && (
               <div style={{ marginBottom: 18, padding: 16, background: '#f7fafc', borderRadius: 8, border: '1px solid #e2e8f0' }}>
-                <label style={{ ...labelStyle, marginBottom: 12 }}>Configuración del botón de email</label>
-                {[
-                  { key: 'targetFieldId', label: 'ID del campo de destinatarios', placeholder: 'field_id del campo email' },
-                  { key: 'emailSubject', label: 'Asunto (usa {{NombreCampo}})', placeholder: 'Novedad: {{Título}}' },
-                  { key: 'emailBody', label: 'Cuerpo del correo', placeholder: 'Hola, se registró una novedad...' },
-                  { key: 'logFieldId', label: 'ID campo de log (opcional)', placeholder: 'field_id para registrar envíos' },
-                ].map(({ key, label, placeholder }) => (
-                  <div key={key} style={{ marginBottom: 12 }}>
-                    <label style={{ ...labelStyle, fontSize: 11 }}>{label}</label>
-                    {key === 'emailBody' ? (
-                      <textarea
-                        value={config[key] ?? ''}
-                        onChange={(e) => setConfig((prev) => ({ ...prev, [key]: e.target.value }))}
-                        rows={3}
-                        placeholder={placeholder}
-                        style={{ ...inputStyle, resize: 'vertical', minHeight: 70 }}
-                      />
-                    ) : (
-                      <input
-                        type="text"
-                        value={config[key] ?? ''}
-                        onChange={(e) => setConfig((prev) => ({ ...prev, [key]: e.target.value }))}
-                        placeholder={placeholder}
-                        style={inputStyle}
-                      />
-                    )}
-                  </div>
-                ))}
+                <label style={{ ...labelStyle, marginBottom: 12 }}>Configuración del webhook</label>
+                <div style={{ marginBottom: 12 }}>
+                  <label style={{ ...labelStyle, fontSize: 11 }}>URL del endpoint (POST)</label>
+                  <input
+                    type="url"
+                    value={config.webhookUrl ?? ''}
+                    onChange={(e) => setConfig((prev) => ({ ...prev, webhookUrl: e.target.value }))}
+                    placeholder="https://hooks.ejemplo.com/webhook/..."
+                    style={inputStyle}
+                  />
+                </div>
+                <div style={{ marginBottom: 12 }}>
+                  <label style={{ ...labelStyle, fontSize: 11 }}>ID campo de log (opcional)</label>
+                  <input
+                    type="text"
+                    value={config.logFieldId ?? ''}
+                    onChange={(e) => setConfig((prev) => ({ ...prev, logFieldId: e.target.value }))}
+                    placeholder="field_id para registrar ejecuciones"
+                    style={inputStyle}
+                  />
+                  <p style={{ fontSize: 11, color: '#a0aec0', marginTop: 4 }}>
+                    Si lo indicas, cada ejecución queda registrada en ese campo de texto.
+                  </p>
+                </div>
+                <div style={{ padding: '10px 14px', background: '#fffbeb', border: '1px solid #fcd34d', borderRadius: 8, fontSize: 12, color: '#92400e' }}>
+                  El endpoint recibirá: <code style={{ fontFamily: 'monospace', background: '#fef3c7', padding: '1px 4px', borderRadius: 3 }}>&#123; recordId, data, triggeredBy, triggeredAt &#125;</code>
+                </div>
               </div>
             )}
 

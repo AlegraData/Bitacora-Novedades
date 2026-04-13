@@ -18,6 +18,7 @@ interface ViewTabsProps {
 export function ViewTabs({ views, activeViewId, onSwitch, onCreate, onUpdate, onDelete }: ViewTabsProps) {
   const [hoveredTabId, setHoveredTabId] = useState<string | null>(null)
   const [openMenuId, setOpenMenuId] = useState<string | null>(null)
+  const [menuPos, setMenuPos] = useState<{ top: number; left: number } | null>(null)
   const [isCreating, setIsCreating] = useState(false)
   const [newName, setNewName] = useState('')
   const [newEmoji, setNewEmoji] = useState('📋')
@@ -27,14 +28,25 @@ export function ViewTabs({ views, activeViewId, onSwitch, onCreate, onUpdate, on
   const [editingEmoji, setEditingEmoji] = useState('📋')
   const [showEditEmojiPicker, setShowEditEmojiPicker] = useState(false)
   const menuRef = useRef<HTMLDivElement>(null)
+  const tabRefs = useRef<Map<string, HTMLDivElement>>(new Map())
   const newInputRef = useRef<HTMLInputElement>(null)
   const editInputRef = useRef<HTMLInputElement>(null)
+
+  function openMenu(viewId: string) {
+    const el = tabRefs.current.get(viewId)
+    if (el) {
+      const rect = el.getBoundingClientRect()
+      setMenuPos({ top: rect.bottom + 2, left: rect.left })
+    }
+    setOpenMenuId(viewId)
+  }
 
   useEffect(() => {
     if (!openMenuId) return
     function handleClick(e: MouseEvent) {
       if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
         setOpenMenuId(null)
+        setMenuPos(null)
       }
     }
     document.addEventListener('mousedown', handleClick)
@@ -51,6 +63,7 @@ export function ViewTabs({ views, activeViewId, onSwitch, onCreate, onUpdate, on
 
   function startEdit(view: View) {
     setOpenMenuId(null)
+    setMenuPos(null)
     setEditingId(view.id)
     setEditingName(view.name)
     setEditingEmoji(view.emoji)
@@ -186,51 +199,42 @@ export function ViewTabs({ views, activeViewId, onSwitch, onCreate, onUpdate, on
         return (
           <div
             key={view.id}
+            ref={(el) => { if (el) tabRefs.current.set(view.id, el); else tabRefs.current.delete(view.id) }}
             style={{ position: 'relative' }}
             onMouseEnter={() => setHoveredTabId(view.id)}
-            onMouseLeave={() => { setHoveredTabId(null); if (openMenuId === view.id) return }}
+            onMouseLeave={() => setHoveredTabId(null)}
           >
             <button
               onClick={() => onSwitch(view.id)}
               style={isActive ? tabActive : {
                 ...tabBase,
-                background: hoveredTabId === view.id ? '#f1f5f9' : 'transparent',
+                background: hoveredTabId === view.id ? '#e2e8f0' : 'transparent',
               }}
             >
               {view.emoji} {view.name}
 
-              {/* ··· menu button */}
-              {!isActive && hoveredTabId === view.id && (
+              {/* ··· menu button — visible en hover o cuando está activa */}
+              {(hoveredTabId === view.id || isActive) && (
                 <span
-                  onClick={(e) => { e.stopPropagation(); setOpenMenuId(v => v === view.id ? null : view.id) }}
+                  onClick={(e) => { e.stopPropagation(); openMenu(view.id) }}
                   style={{
                     display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
                     width: 18, height: 18, borderRadius: 3,
                     background: openMenuId === view.id ? '#e2e8f0' : 'transparent',
-                    color: '#64748b', fontSize: 13, marginLeft: 2,
-                  }}
-                >···</span>
-              )}
-              {isActive && (
-                <span
-                  onClick={(e) => { e.stopPropagation(); setOpenMenuId(v => v === view.id ? null : view.id) }}
-                  style={{
-                    display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-                    width: 18, height: 18, borderRadius: 3,
-                    background: openMenuId === view.id ? 'rgba(255,255,255,0.2)' : 'transparent',
-                    color: 'rgba(255,255,255,0.7)', fontSize: 13, marginLeft: 2,
+                    color: isActive ? '#475569' : '#64748b',
+                    fontSize: 13, marginLeft: 2, fontWeight: 700,
                   }}
                 >···</span>
               )}
             </button>
 
-            {/* Dropdown menu */}
-            {openMenuId === view.id && (
+            {/* Dropdown — renderizado fuera del overflow via fixed */}
+            {openMenuId === view.id && menuPos && (
               <div ref={menuRef} style={{
-                position: 'absolute', top: '100%', left: 0, zIndex: 400,
+                position: 'fixed', top: menuPos.top, left: menuPos.left, zIndex: 9999,
                 background: '#fff', border: '1px solid #e2e8f0',
-                borderRadius: 8, boxShadow: '0 4px 20px rgba(0,0,0,0.12)',
-                minWidth: 150, padding: '4px 0', marginTop: 2,
+                borderRadius: 8, boxShadow: '0 4px 20px rgba(0,0,0,0.15)',
+                minWidth: 160, padding: '4px 0',
               }}>
                 <button type="button" onClick={() => startEdit(view)} style={{
                   display: 'block', width: '100%', padding: '8px 14px',
@@ -240,7 +244,7 @@ export function ViewTabs({ views, activeViewId, onSwitch, onCreate, onUpdate, on
                 onMouseEnter={(e) => (e.currentTarget.style.background = '#f8fafc')}
                 onMouseLeave={(e) => (e.currentTarget.style.background = 'none')}
                 >✏️ Renombrar</button>
-                <button type="button" onClick={() => { setOpenMenuId(null); onDelete(view.id) }} style={{
+                <button type="button" onClick={() => { setOpenMenuId(null); setMenuPos(null); onDelete(view.id) }} style={{
                   display: 'block', width: '100%', padding: '8px 14px',
                   fontSize: 13, color: '#ef4444', background: 'none',
                   border: 'none', cursor: 'pointer', textAlign: 'left',
