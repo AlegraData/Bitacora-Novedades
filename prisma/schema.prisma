@@ -1,0 +1,79 @@
+generator client {
+  provider = "prisma-client-js"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum Role {
+  ADMIN
+  MANAGER
+  VIEWER
+}
+
+model User {
+  id        String     @id @default(cuid())
+  email     String     @unique
+  name      String?
+  image     String?
+  role      Role       @default(VIEWER)
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
+  auditLogs AuditLog[]
+}
+
+model Field {
+  id           String            @id @default(cuid())
+  name         String
+  type         String
+  order        Int               @default(0)
+  isFilterable Boolean           @default(true)
+  isVisible    Boolean           @default(true)
+  config       Json?
+  options      Tag[]
+  permissions  FieldPermission[]
+  createdAt    DateTime          @default(now())
+  updatedAt    DateTime          @updatedAt
+}
+
+model Tag {
+  id      String @id @default(cuid())
+  fieldId String
+  field   Field  @relation(fields: [fieldId], references: [id], onDelete: Cascade)
+  name    String
+  color   String @default("#e2e8f0")
+  order   Int    @default(0)
+}
+
+model Record {
+  id             String   @id @default(cuid())
+  data           Json
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  createdByEmail String
+  createdByName  String
+}
+
+model FieldPermission {
+  id      String  @id @default(cuid())
+  fieldId String
+  field   Field   @relation(fields: [fieldId], references: [id], onDelete: Cascade)
+  role    Role
+  canEdit Boolean @default(true)
+
+  @@unique([fieldId, role])
+}
+
+model AuditLog {
+  id        String   @id @default(cuid())
+  timestamp DateTime @default(now())
+  userId    String?
+  user      User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  userEmail String
+  userName  String
+  action    String
+  recordId  String?
+  details   Json?
+}

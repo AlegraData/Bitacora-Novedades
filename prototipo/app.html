@@ -1,0 +1,1738 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Bitácora Novedades Product</title>
+  <style>
+    *{box-sizing:border-box;margin:0;padding:0}
+    :root{
+      --primary:#00C4A0;--primary-dark:#00A888;--primary-light:#E0F7F4;
+      --dark:#1e2a3a;--dark-2:#2d3748;
+      --g50:#f7fafc;--g100:#f0f4f8;--g200:#e2e8f0;--g300:#cbd5e0;
+      --g400:#a0aec0;--g600:#718096;--g700:#4a5568;--g900:#1a202c;
+      --white:#fff;--red:#fc8181;--yellow:#f6e05e;--blue:#63b3ed;
+      --purple:#b794f4;--green:#68d391;--orange:#f6ad55;--pink:#f687b3;
+      --shadow:0 2px 8px rgba(0,0,0,.08);--shadow-lg:0 8px 32px rgba(0,0,0,.14);
+      --radius:8px;--radius-lg:12px;
+    }
+    body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;
+      background:var(--g100);min-height:100vh;display:flex;flex-direction:column;
+      font-size:14px;color:var(--g900);}
+
+    /* ===== NAV ===== */
+    nav{background:var(--dark);height:56px;display:flex;align-items:center;
+      justify-content:space-between;padding:0 20px;flex-shrink:0;z-index:100;
+      box-shadow:0 2px 8px rgba(0,0,0,.2);}
+    .nav-left{display:flex;align-items:center;gap:12px}
+    .nav-logo-svg{width:40px;height:28px}
+    .nav-brand-text .app-name{font-size:14px;font-weight:600;color:var(--white);line-height:1.2}
+    .nav-brand-text .app-name span{color:var(--primary)}
+    .nav-brand-text .app-sub{font-size:11px;color:var(--g400)}
+    .nav-right{display:flex;align-items:center;gap:12px}
+    .nav-btn{background:transparent;border:1px solid rgba(255,255,255,.15);
+      color:var(--g400);padding:5px 12px;border-radius:6px;cursor:pointer;
+      font-size:12px;transition:all .15s;}
+    .nav-btn:hover{border-color:var(--primary);color:var(--primary)}
+    .nav-user{display:flex;align-items:center;gap:8px;color:var(--g300);font-size:13px}
+    .avatar{width:30px;height:30px;border-radius:50%;background:var(--primary);
+      display:flex;align-items:center;justify-content:center;font-size:12px;
+      font-weight:600;color:var(--white);overflow:hidden;flex-shrink:0}
+    .avatar img{width:100%;height:100%;object-fit:cover}
+
+    /* ===== TOOLBAR ===== */
+    .toolbar{background:var(--white);border-bottom:1px solid var(--g200);
+      padding:10px 20px;display:flex;align-items:center;gap:10px;flex-wrap:wrap;flex-shrink:0}
+    .toolbar-left{display:flex;align-items:center;gap:8px;flex:1;min-width:0}
+    .toolbar-right{display:flex;align-items:center;gap:8px}
+
+    .search-input{padding:7px 12px;border:1px solid var(--g200);border-radius:var(--radius);
+      font-size:13px;width:220px;outline:none;transition:border-color .15s}
+    .search-input:focus{border-color:var(--primary)}
+
+    .filter-chip{display:inline-flex;align-items:center;gap:6px;
+      background:var(--primary-light);color:var(--primary-dark);
+      border:1px solid var(--primary);border-radius:20px;
+      padding:4px 10px;font-size:12px;font-weight:500}
+    .filter-chip .rm{cursor:pointer;font-size:14px;line-height:1;
+      color:var(--primary-dark);opacity:.7}
+    .filter-chip .rm:hover{opacity:1}
+
+    /* ===== BUTTONS ===== */
+    .btn{display:inline-flex;align-items:center;gap:6px;padding:7px 14px;
+      border-radius:var(--radius);font-size:13px;font-weight:500;
+      cursor:pointer;border:none;transition:all .15s}
+    .btn-primary{background:var(--primary);color:var(--white)}
+    .btn-primary:hover{background:var(--primary-dark)}
+    .btn-secondary{background:var(--white);color:var(--g700);border:1px solid var(--g200)}
+    .btn-secondary:hover{border-color:var(--g400);background:var(--g50)}
+    .btn-ghost{background:transparent;color:var(--g600);border:1px solid transparent}
+    .btn-ghost:hover{background:var(--g100);border-color:var(--g200)}
+    .btn-danger{background:var(--white);color:#e53e3e;border:1px solid #feb2b2}
+    .btn-danger:hover{background:#fff5f5}
+    .btn-sm{padding:5px 10px;font-size:12px}
+    .btn-icon{padding:6px;border-radius:6px}
+
+    /* ===== TABLE ===== */
+    .table-wrapper{flex:1;overflow:auto;padding:16px 20px}
+    .table-container{background:var(--white);border-radius:var(--radius-lg);
+      box-shadow:var(--shadow);overflow:hidden;min-width:fit-content}
+
+    table{width:100%;border-collapse:collapse;table-layout:auto}
+    thead tr{background:var(--dark)}
+    th{padding:10px 14px;text-align:left;font-size:12px;font-weight:600;
+      color:var(--g400);white-space:nowrap;cursor:pointer;user-select:none;
+      border-right:1px solid rgba(255,255,255,.06);position:sticky;top:0;
+      background:var(--dark)}
+    th:last-child{border-right:none}
+    th:hover{color:var(--white)}
+    th .th-inner{display:flex;align-items:center;gap:6px}
+    th .field-type-icon{font-size:10px;opacity:.6}
+
+    tbody tr{border-bottom:1px solid var(--g100);transition:background .1s}
+    tbody tr:hover{background:var(--g50)}
+    tbody tr:last-child{border-bottom:none}
+    td{padding:9px 14px;vertical-align:middle;font-size:13px;
+      color:var(--g700);border-right:1px solid var(--g100);max-width:280px}
+    td:last-child{border-right:none}
+
+    /* ID column */
+    td:first-child{color:var(--g400);font-size:11px;font-family:monospace;
+      white-space:nowrap;max-width:none}
+
+    /* Add field column */
+    .th-add{cursor:pointer;color:var(--g400)!important}
+    .th-add:hover{color:var(--primary)!important;background:rgba(0,196,160,.1)!important}
+
+    /* Sticky / pinned columns */
+    th.col-pinned{z-index:3}
+    td.col-pinned{position:sticky;z-index:1;background:var(--white)}
+    tbody tr:hover td.col-pinned{background:var(--g50)}
+    td.col-pinned::after{content:'';position:absolute;top:0;right:-4px;
+      bottom:0;width:4px;background:linear-gradient(to right,rgba(0,0,0,.06),transparent)}
+
+    /* Empty state */
+    .empty-state{text-align:center;padding:60px 20px;color:var(--g400)}
+    .empty-state .icon{font-size:48px;margin-bottom:12px}
+    .empty-state p{font-size:15px;margin-bottom:4px;color:var(--g600)}
+    .empty-state small{font-size:13px}
+
+    /* ===== TAG CHIPS ===== */
+    .tag-chip{display:inline-flex;align-items:center;padding:2px 8px;
+      border-radius:20px;font-size:12px;font-weight:500;margin:1px}
+    .person-chip{display:inline-flex;align-items:center;gap:5px;
+      padding:2px 8px 2px 2px;border-radius:20px;background:var(--g100);
+      font-size:12px;margin:1px}
+    .person-chip .mini-avatar{width:18px;height:18px;border-radius:50%;
+      background:var(--primary);display:flex;align-items:center;
+      justify-content:center;font-size:9px;font-weight:600;color:var(--white);
+      overflow:hidden;flex-shrink:0}
+    .person-chip .mini-avatar img{width:100%;height:100%;object-fit:cover}
+    .url-link{color:var(--primary);text-decoration:none;font-size:12px}
+    .url-link:hover{text-decoration:underline}
+    .checkbox-icon{font-size:16px}
+    .cell-truncate{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+      max-width:200px;display:block}
+
+    /* ===== MODALS ===== */
+    .overlay{position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:200;
+      display:flex;align-items:flex-start;justify-content:center;
+      padding-top:60px;opacity:0;transition:opacity .2s}
+    .overlay.show{opacity:1}
+    .overlay.hidden{display:none}
+
+    .modal{background:var(--white);border-radius:var(--radius-lg);
+      box-shadow:var(--shadow-lg);width:100%;max-width:560px;
+      max-height:calc(100vh - 120px);display:flex;flex-direction:column;
+      transform:translateY(-16px);transition:transform .2s}
+    .overlay.show .modal{transform:translateY(0)}
+
+    .modal-lg{max-width:860px}
+    .modal-sm{max-width:420px}
+
+    .modal-header{padding:20px 24px;border-bottom:1px solid var(--g200);
+      display:flex;align-items:center;justify-content:space-between;flex-shrink:0}
+    .modal-header h3{font-size:16px;font-weight:600;color:var(--g900)}
+    .modal-close{background:none;border:none;cursor:pointer;color:var(--g400);
+      font-size:20px;line-height:1;padding:4px;border-radius:4px}
+    .modal-close:hover{background:var(--g100);color:var(--g700)}
+
+    .modal-body{padding:24px;overflow-y:auto;flex:1}
+    .modal-footer{padding:16px 24px;border-top:1px solid var(--g200);
+      display:flex;justify-content:flex-end;gap:10px;flex-shrink:0}
+
+    /* ===== FORMS ===== */
+    .form-group{margin-bottom:18px}
+    label{display:block;font-size:12px;font-weight:600;color:var(--g600);
+      margin-bottom:6px;text-transform:uppercase;letter-spacing:.4px}
+    .form-input,.form-select,.form-textarea{width:100%;padding:8px 12px;
+      border:1px solid var(--g200);border-radius:var(--radius);font-size:14px;
+      outline:none;transition:border-color .15s;background:var(--white);
+      color:var(--g900)}
+    .form-input:focus,.form-select:focus,.form-textarea:focus{border-color:var(--primary)}
+    .form-textarea{min-height:80px;resize:vertical}
+
+    .toggle-row{display:flex;align-items:center;justify-content:space-between;
+      padding:10px 0;border-bottom:1px solid var(--g100)}
+    .toggle-label{font-size:13px;color:var(--g700)}
+    .toggle{position:relative;width:40px;height:22px}
+    .toggle input{opacity:0;width:0;height:0}
+    .toggle-slider{position:absolute;inset:0;background:var(--g300);
+      border-radius:22px;cursor:pointer;transition:.2s}
+    .toggle-slider:before{content:'';position:absolute;width:16px;height:16px;
+      left:3px;top:3px;background:var(--white);border-radius:50%;transition:.2s}
+    .toggle input:checked+.toggle-slider{background:var(--primary)}
+    .toggle input:checked+.toggle-slider:before{transform:translateX(18px)}
+
+    /* FIELD TYPE GRID */
+    .type-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:4px}
+    .type-card{padding:10px;border:1.5px solid var(--g200);border-radius:var(--radius);
+      cursor:pointer;text-align:center;transition:all .15s}
+    .type-card:hover{border-color:var(--primary);background:var(--primary-light)}
+    .type-card.selected{border-color:var(--primary);background:var(--primary-light)}
+    .type-card .tc-icon{font-size:18px;margin-bottom:4px}
+    .type-card .tc-label{font-size:11px;color:var(--g700);font-weight:500}
+
+    /* TAG MANAGEMENT */
+    .tag-list{display:flex;flex-direction:column;gap:6px;margin-bottom:12px}
+    .tag-item{display:flex;align-items:center;gap:8px;padding:6px 10px;
+      background:var(--g50);border-radius:var(--radius);border:1px solid var(--g200)}
+    .tag-color-btn{width:20px;height:20px;border-radius:50%;border:2px solid var(--white);
+      box-shadow:0 0 0 1px var(--g300);cursor:pointer;flex-shrink:0}
+    .tag-name-input{flex:1;border:none;background:transparent;font-size:13px;
+      color:var(--g900);outline:none}
+    .tag-del{background:none;border:none;color:var(--g400);cursor:pointer;font-size:16px;
+      line-height:1;padding:2px 4px;border-radius:4px}
+    .tag-del:hover{color:var(--red);background:var(--g100)}
+    .color-palette{display:flex;gap:6px;flex-wrap:wrap;padding:8px 0}
+    .color-dot{width:22px;height:22px;border-radius:50%;cursor:pointer;
+      border:2px solid transparent;transition:transform .1s}
+    .color-dot:hover{transform:scale(1.2)}
+    .color-dot.selected{border-color:var(--g700)}
+
+    /* PERSON PICKER */
+    .person-search{width:100%;padding:8px 12px;border:1px solid var(--g200);
+      border-radius:var(--radius);font-size:13px;outline:none;margin-bottom:8px}
+    .person-search:focus{border-color:var(--primary)}
+    .person-list{max-height:220px;overflow-y:auto;border:1px solid var(--g200);
+      border-radius:var(--radius)}
+    .person-item{display:flex;align-items:center;gap:10px;padding:8px 12px;
+      cursor:pointer;transition:background .1s}
+    .person-item:hover{background:var(--g50)}
+    .person-item.selected{background:var(--primary-light)}
+    .person-item .p-name{font-size:13px;font-weight:500;color:var(--g900)}
+    .person-item .p-email{font-size:11px;color:var(--g400)}
+    .selected-persons{display:flex;flex-wrap:wrap;gap:4px;min-height:32px;
+      padding:4px;border:1px solid var(--g200);border-radius:var(--radius);
+      margin-bottom:8px;cursor:text}
+    .person-chip-remove{cursor:pointer;margin-left:4px;color:var(--g400)}
+    .person-chip-remove:hover{color:var(--g700)}
+
+    /* RECORD PANEL (right side) */
+    .record-panel{position:fixed;top:56px;right:0;bottom:0;width:500px;
+      background:var(--white);box-shadow:-4px 0 20px rgba(0,0,0,.1);
+      z-index:150;display:flex;flex-direction:column;
+      transform:translateX(100%);transition:transform .25s cubic-bezier(.4,0,.2,1)}
+    .record-panel.open{transform:translateX(0)}
+    .panel-header{padding:16px 20px;border-bottom:1px solid var(--g200);
+      display:flex;align-items:center;justify-content:space-between;flex-shrink:0}
+    .panel-header h3{font-size:15px;font-weight:600;color:var(--g900)}
+    .panel-body{flex:1;overflow-y:auto;padding:20px}
+    .panel-footer{padding:14px 20px;border-top:1px solid var(--g200);
+      display:flex;justify-content:space-between;align-items:center;flex-shrink:0}
+    .panel-field{margin-bottom:16px}
+    .panel-field-label{font-size:11px;font-weight:600;color:var(--g500);
+      text-transform:uppercase;letter-spacing:.4px;margin-bottom:5px;
+      display:flex;align-items:center;gap:6px}
+    .panel-field-label .type-icon{opacity:.5}
+
+    /* ===== AUDIT LOG ===== */
+    .audit-item{display:flex;gap:10px;padding:10px 0;border-bottom:1px solid var(--g100)}
+    .audit-avatar{width:28px;height:28px;border-radius:50%;background:var(--primary-light);
+      display:flex;align-items:center;justify-content:center;font-size:11px;
+      font-weight:600;color:var(--primary-dark);flex-shrink:0}
+    .audit-content{flex:1;min-width:0}
+    .audit-action{font-size:13px;color:var(--g700)}
+    .audit-meta{font-size:11px;color:var(--g400);margin-top:2px}
+
+    /* ===== NOTIFY TOAST ===== */
+    #toast{position:fixed;bottom:24px;right:24px;background:var(--g900);
+      color:var(--white);padding:12px 20px;border-radius:var(--radius);
+      font-size:13px;z-index:999;box-shadow:var(--shadow-lg);
+      transform:translateY(16px);opacity:0;transition:all .25s;pointer-events:none}
+    #toast.show{transform:translateY(0);opacity:1}
+    #toast.success{background:#276749}
+    #toast.error{background:#9b2c2c}
+
+    /* ===== SPINNER ===== */
+    .spinner{display:inline-block;width:16px;height:16px;border:2px solid var(--g200);
+      border-top-color:var(--primary);border-radius:50%;animation:spin .7s linear infinite}
+    @keyframes spin{to{transform:rotate(360deg)}}
+
+    /* ===== LOADING ROW ===== */
+    .loading-row td{padding:24px;text-align:center;color:var(--g400)}
+
+    /* ===== RESPONSIVE ===== */
+    @media(max-width:768px){
+      .record-panel{width:100%}
+      .table-wrapper{padding:8px}
+    }
+  </style>
+</head>
+<body>
+
+<!-- ===== NAV ===== -->
+<nav>
+  <div class="nav-left">
+    <svg class="nav-logo-svg" viewBox="0 0 60 42" xmlns="http://www.w3.org/2000/svg" fill="#00C4A0">
+      <path d="M44.1655 35.523C42.7057 36.262 30.0716 38.8032 20.4654 36.2079C13.2923 34.2614 3.72211 28.6923 0.532056 26.7639C-0.0446777 26.4034 -0.170838 25.6284 0.243689 25.1058L12.0487 10.1467C12.5533 9.51594 13.5446 9.57001 13.9591 10.2549C15.8696 13.2827 20.7177 20.4739 26.467 25.3581C34.1989 31.9184 40.4528 33.7568 44.2016 34.1893C44.6702 34.2434 45.6074 34.7661 44.1655 35.523Z"/>
+      <path d="M40.7596 30.3143C39.5701 30.044 31.0273 25.5022 26.7018 19.4104C23.5838 15.0309 20.7902 7.62346 19.7629 4.73979C19.5286 4.09097 19.9252 3.42412 20.592 3.27993L33.8388 0.396268C34.6319 0.216039 35.3528 0.900912 35.2627 1.69392C34.9202 4.57759 34.3975 10.6874 35.3708 15.9861C36.7225 23.4656 39.462 27.5208 41.4265 29.5574C41.6788 29.8097 41.9672 30.5666 40.7777 30.3143H40.7596Z"/>
+      <path d="M42.1111 26.8539C41.5704 26.2051 38.7768 20.1494 38.939 14.9948C39.0472 11.4983 40.4349 6.65018 41.1378 4.41534C41.3361 3.76652 42.057 3.46013 42.6878 3.7485L50.3295 7.31703C51.0685 7.65947 51.2307 8.6327 50.672 9.22746C49.1941 10.7955 46.6709 13.6971 45.1209 16.743C42.7419 21.411 42.5436 24.7812 42.7779 26.7277C42.814 26.962 42.6518 27.5027 42.1111 26.8719V26.8539Z"/>
+      <path d="M45.2828 24.9437C45.2648 24.4571 46.1299 20.6903 48.0223 18.3833C49.2478 16.9055 51.4286 15.2654 52.6001 14.4363C53.0146 14.148 53.5914 14.2921 53.8257 14.7427L55.8442 18.6357C56.1146 19.1764 55.7721 19.8432 55.1774 19.9333C53.9158 20.1496 51.9152 20.5821 50.2571 21.3751C47.4996 22.6728 46.238 24.1507 45.6613 25.1239C45.5892 25.2501 45.3189 25.4303 45.3008 24.9437H45.2828Z"/>
+    </svg>
+    <div class="nav-brand-text">
+      <div class="app-name">Alegra <span>·</span> Bitácora</div>
+      <div class="app-sub">Novedades Product</div>
+    </div>
+  </div>
+  <div class="nav-right">
+    <button class="nav-btn" onclick="openAuditModal()">Actividad</button>
+    <a class="nav-btn" id="navHome" href="#">Inicio</a>
+    <div class="nav-user">
+      <div class="avatar" id="navAvatar">–</div>
+      <span id="navName" style="color:var(--g400)">...</span>
+    </div>
+  </div>
+</nav>
+
+<!-- ===== TOOLBAR ===== -->
+<div class="toolbar">
+  <div class="toolbar-left">
+    <input type="text" class="search-input" id="searchInput" placeholder="Buscar en todos los campos..." oninput="onSearch(this.value)">
+    <div id="activeFilters" style="display:flex;gap:6px;flex-wrap:wrap"></div>
+  </div>
+  <div class="toolbar-right">
+    <button class="btn btn-secondary btn-sm" onclick="openFiltersModal()">⚙ Filtros</button>
+    <button class="btn btn-secondary btn-sm" onclick="openReorderModal()">↕ Ordenar campos</button>
+    <button class="btn btn-primary btn-sm" onclick="openRecordPanel(null)">+ Nuevo registro</button>
+  </div>
+</div>
+
+<!-- ===== TABLE ===== -->
+<div class="table-wrapper">
+  <div class="table-container">
+    <table id="mainTable">
+      <thead>
+        <tr id="thead-row">
+          <!-- Dynamic field columns injected here -->
+          <th class="th-add" onclick="openAddFieldModal()" title="Agregar campo">
+            <div class="th-inner">＋ Campo</div>
+          </th>
+        </tr>
+      </thead>
+      <tbody id="tbody">
+        <tr class="loading-row"><td colspan="20"><div class="spinner"></div> Cargando...</td></tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- ===== RECORD PANEL ===== -->
+<div class="record-panel" id="recordPanel">
+  <div class="panel-header">
+    <h3 id="panelTitle">Nuevo registro</h3>
+    <div style="display:flex;gap:8px">
+      <button class="btn btn-danger btn-sm" id="panelDeleteBtn" onclick="deleteCurrentRecord()" style="display:none">Eliminar</button>
+      <button class="modal-close" onclick="closeRecordPanel()">×</button>
+    </div>
+  </div>
+  <div class="panel-body" id="panelBody"></div>
+  <div class="panel-footer">
+    <span id="panelMeta" style="font-size:11px;color:var(--g400)"></span>
+    <button class="btn btn-primary" onclick="saveCurrentRecord()">Guardar</button>
+  </div>
+</div>
+
+<!-- ===== MODAL: AGREGAR/EDITAR CAMPO ===== -->
+<div class="overlay hidden" id="fieldModal">
+  <div class="modal">
+    <div class="modal-header">
+      <h3 id="fieldModalTitle">Nuevo campo</h3>
+      <button class="modal-close" onclick="closeFieldModal()">×</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-group">
+        <label>Nombre del campo</label>
+        <input type="text" class="form-input" id="fieldName" placeholder="Ej: Responsable, Tipo, Fecha...">
+      </div>
+      <div class="form-group">
+        <label>Tipo de campo</label>
+        <div class="type-grid" id="typeGrid">
+          <!-- Injected by JS -->
+        </div>
+      </div>
+
+      <!-- Tags section (select/multiselect) -->
+      <div id="tagsSection" style="display:none">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
+          <label style="margin:0">Opciones / Etiquetas</label>
+          <button class="btn btn-secondary btn-sm" onclick="addNewTag()">+ Agregar</button>
+        </div>
+        <div class="tag-list" id="tagList"></div>
+      </div>
+
+      <!-- Button config section -->
+      <div id="buttonSection" style="display:none">
+        <div style="background:var(--g50);border-radius:var(--radius);padding:16px;border:1px solid var(--g200)">
+          <p style="font-size:13px;color:var(--g600);margin-bottom:14px">
+            Configura la acción que ejecutará este botón al hacer clic.
+          </p>
+          <div class="form-group">
+            <label>Campo destino de correos</label>
+            <select class="form-select" id="btnTargetField">
+              <option value="">— Selecciona un campo —</option>
+            </select>
+            <small style="color:var(--g400);font-size:11px;margin-top:4px;display:block">
+              Debe ser un campo de tipo "correo" o "texto" que contenga correos electrónicos
+            </small>
+          </div>
+          <div class="form-group">
+            <label>Asunto del correo</label>
+            <input type="text" class="form-input" id="btnSubject" placeholder="Ej: Nueva novedad: {{Título}}">
+          </div>
+          <div class="form-group">
+            <label>Cuerpo del correo</label>
+            <textarea class="form-textarea" id="btnBody" placeholder="Usa {{NombreCampo}} para insertar valores del registro.&#10;Ej: Hola,&#10;&#10;Te informamos sobre: {{Título}}&#10;Fecha: {{Fecha de lanzamiento}}"></textarea>
+          </div>
+          <div class="form-group" style="margin-bottom:0">
+            <label>Campo log (opcional)</label>
+            <select class="form-select" id="btnLogField">
+              <option value="">— No registrar —</option>
+            </select>
+            <small style="color:var(--g400);font-size:11px;margin-top:4px;display:block">
+              Guarda en este campo un registro de los envíos realizados
+            </small>
+          </div>
+        </div>
+      </div>
+
+      <!-- Toggle: filtrable -->
+      <div class="toggle-row" id="filtrableRow">
+        <span class="toggle-label">Mostrar en filtros</span>
+        <label class="toggle">
+          <input type="checkbox" id="fieldFiltrable" checked>
+          <span class="toggle-slider"></span>
+        </label>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeFieldModal()">Cancelar</button>
+      <button class="btn btn-danger btn-sm" id="deleteFieldBtn" onclick="deleteCurrentField()" style="display:none">Eliminar campo</button>
+      <button class="btn btn-primary" onclick="saveCurrentField()">Guardar campo</button>
+    </div>
+  </div>
+</div>
+
+<!-- ===== MODAL: FILTROS ===== -->
+<div class="overlay hidden" id="filtersModal">
+  <div class="modal modal-sm">
+    <div class="modal-header">
+      <h3>Filtrar registros</h3>
+      <button class="modal-close" onclick="closeModal('filtersModal')">×</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-group">
+        <label>Campo</label>
+        <select class="form-select" id="filterField" onchange="onFilterFieldChange()">
+          <option value="">— Selecciona campo —</option>
+        </select>
+      </div>
+      <div class="form-group" id="filterValueGroup" style="display:none">
+        <label>Valor</label>
+        <div id="filterValueContainer"></div>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px" id="filterDateGroup" style="display:none">
+        <div class="form-group">
+          <label>Desde</label>
+          <input type="date" class="form-input" id="filterDateFrom">
+        </div>
+        <div class="form-group" style="margin-bottom:0">
+          <label>Hasta</label>
+          <input type="date" class="form-input" id="filterDateTo">
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="clearFilters()">Limpiar filtros</button>
+      <button class="btn btn-primary" onclick="applyFilter()">Aplicar</button>
+    </div>
+  </div>
+</div>
+
+<!-- ===== MODAL: ACTIVIDAD ===== -->
+<div class="overlay hidden" id="auditModal">
+  <div class="modal">
+    <div class="modal-header">
+      <h3>Registro de actividad</h3>
+      <button class="modal-close" onclick="closeModal('auditModal')">×</button>
+    </div>
+    <div class="modal-body" id="auditBody">
+      <div style="text-align:center;padding:20px"><div class="spinner"></div></div>
+    </div>
+  </div>
+</div>
+
+<!-- ===== PERSON PICKER MODAL ===== -->
+<div class="overlay hidden" id="personModal">
+  <div class="modal modal-sm">
+    <div class="modal-header">
+      <h3 id="personModalTitle">Seleccionar persona</h3>
+      <button class="modal-close" onclick="closeModal('personModal')">×</button>
+    </div>
+    <div class="modal-body">
+      <div id="selectedPersonsBox" class="selected-persons"></div>
+      <input type="text" class="person-search" id="personSearch" placeholder="Buscar por nombre o correo..." oninput="filterPersons(this.value)">
+      <div class="person-list" id="personList">
+        <div style="text-align:center;padding:16px"><div class="spinner"></div></div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeModal('personModal')">Cancelar</button>
+      <button class="btn btn-primary" onclick="confirmPersonSelection()">Confirmar</button>
+    </div>
+  </div>
+</div>
+
+<!-- ===== REORDER FIELDS MODAL ===== -->
+<div class="overlay hidden" id="reorderModal">
+  <div class="modal modal-sm">
+    <div class="modal-header">
+      <h3>Ordenar campos</h3>
+      <button class="modal-close" onclick="closeModal('reorderModal')">×</button>
+    </div>
+    <div class="modal-body">
+      <p style="font-size:13px;color:var(--g600);margin-bottom:14px">Arrastra para reordenar. Haz clic en 📌 para fijar una columna (no se desplaza al hacer scroll).</p>
+      <div id="reorderList" style="display:flex;flex-direction:column;gap:6px"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeModal('reorderModal')">Cancelar</button>
+      <button class="btn btn-primary" onclick="saveFieldOrder()">Guardar orden</button>
+    </div>
+  </div>
+</div>
+
+<!-- ===== TOAST ===== -->
+<div id="toast"></div>
+
+<script>
+// ============================================================
+//  ESTADO GLOBAL
+// ============================================================
+var state = {
+  currentUser:   null,
+  fields:        [],
+  records:       [],
+  tags:          {},        // { fieldId: [tags] }
+  wsUsers:       [],
+  filters:       {},
+  searchQuery:   '',
+  editingField:  null,
+  editingRecord: null,
+  personCallback: null,
+  personMultiple: false,
+  personSelected: [],
+  pinnedFields:  {}         // { fieldId: true } — columnas fijas
+};
+
+// Cargar columnas fijas guardadas
+try {
+  var _storedPinned = localStorage.getItem('bitacora_pinned');
+  if (_storedPinned) state.pinnedFields = JSON.parse(_storedPinned);
+} catch(e) {}
+
+var FIELD_TYPES = [
+  { type:'text',        icon:'Aa',  label:'Texto' },
+  { type:'textarea',    icon:'¶',   label:'Párrafo' },
+  { type:'number',      icon:'#',   label:'Número' },
+  { type:'date',        icon:'📅',  label:'Fecha' },
+  { type:'email',       icon:'@',   label:'Correo' },
+  { type:'emails',      icon:'📧',  label:'Correos múlt.' },
+  { type:'url',         icon:'🔗',  label:'URL' },
+  { type:'select',      icon:'🏷',  label:'Etiqueta' },
+  { type:'multiselect', icon:'🏷🏷', label:'Etiquetas múlt.' },
+  { type:'person',      icon:'👤',  label:'Persona' },
+  { type:'multiperson', icon:'👥',  label:'Personas múlt.' },
+  { type:'checkbox',    icon:'☑',  label:'Casilla' },
+  { type:'button',      icon:'▶',  label:'Botón acción' }
+];
+
+var TAG_COLORS = [
+  {bg:'#E2E8F0',text:'#4A5568'},{bg:'#FED7D7',text:'#C53030'},
+  {bg:'#FEEBC8',text:'#C05621'},{bg:'#FEFCBF',text:'#744210'},
+  {bg:'#C6F6D5',text:'#276749'},{bg:'#BEE3F8',text:'#2B6CB0'},
+  {bg:'#E9D8FD',text:'#553C9A'},{bg:'#FED7E2',text:'#97266D'},
+  {bg:'#B2F5EA',text:'#234E52'},{bg:'#E0F7F4',text:'#00A888'}
+];
+
+// ============================================================
+//  INIT
+// ============================================================
+document.addEventListener('DOMContentLoaded', function() {
+  console.log('[Bitácora App] DOMContentLoaded — iniciando app...');
+
+  try {
+    // Home link — derivado del cliente para evitar congelamiento
+    document.getElementById('navHome').href = window.location.href.split('?')[0];
+
+    // Build type grid
+    buildTypeGrid();
+
+    // Load user
+    console.log('[Bitácora App] Cargando usuario actual...');
+    call('getCurrentUser').then(function(user) {
+      console.log('[Bitácora App] Usuario:', user.email, '| Nombre:', user.name, '| Foto:', !!user.photo);
+      state.currentUser = user;
+      var av = document.getElementById('navAvatar');
+      document.getElementById('navName').textContent = user.name || user.email;
+      document.getElementById('navName').style.color = 'var(--g300)';
+      if (user.photo) { av.innerHTML = '<img src="'+user.photo+'" alt="">'; }
+      else { av.textContent = (user.name||user.email).charAt(0).toUpperCase(); }
+    }).catch(function(err) {
+      console.error('[Bitácora App] Error al cargar usuario:', err);
+    });
+
+    // Load fields then records
+    console.log('[Bitácora App] Cargando campos...');
+    loadFields().then(function() {
+      console.log('[Bitácora App] Campos cargados:', state.fields.length, '— cargando registros...');
+      loadRecords();
+    }).catch(function(err) {
+      console.error('[Bitácora App] Error al cargar campos:', err);
+    });
+
+    // Load workspace users in background
+    console.log('[Bitácora App] Cargando usuarios del workspace en background...');
+    call('getWorkspaceUsers').then(function(res) {
+      if (res && res.success) {
+        state.wsUsers = res.data || [];
+        console.log('[Bitácora App] Usuarios del workspace:', state.wsUsers.length, '(fuente:', res.source || 'api', ')');
+      } else {
+        console.warn('[Bitácora App] No se pudieron cargar usuarios:', res && res.error);
+      }
+    }).catch(function(err) {
+      console.error('[Bitácora App] Error cargando usuarios del workspace:', err);
+    });
+
+  } catch(initErr) {
+    console.error('[Bitácora App] Error CRÍTICO en init:', initErr);
+    document.getElementById('tbody').innerHTML =
+      '<tr><td colspan="20" style="text-align:center;color:red;padding:24px">Error al inicializar la app: ' + initErr.message + '</td></tr>';
+  }
+});
+
+// ============================================================
+//  SERVER CALL WRAPPER (returns Promise)
+// ============================================================
+function call(fnName) {
+  var args = Array.prototype.slice.call(arguments, 1);
+  console.log('[Server] Llamando:', fnName, args.length > 0 ? args : '');
+  var t0 = Date.now();
+  return new Promise(function(resolve, reject) {
+    var runner = google.script.run
+      .withSuccessHandler(function(result) {
+        console.log('[Server] OK:', fnName, '(' + (Date.now()-t0) + 'ms)', result && result.success === false ? '⚠ success:false — ' + result.error : '');
+        resolve(result);
+      })
+      .withFailureHandler(function(err) {
+        console.error('[Server] ERROR:', fnName, '(' + (Date.now()-t0) + 'ms)', err);
+        reject(err);
+      });
+    runner[fnName].apply(runner, args);
+  });
+}
+
+// ============================================================
+//  LOAD FIELDS
+// ============================================================
+function loadFields() {
+  return call('getFields').then(function(res) {
+    if (res && res.success) {
+      state.fields = res.data || [];
+      console.log('[App] Campos recibidos:', state.fields.length, state.fields.map(function(f){return f.nombre+'('+f.tipo+')';}).join(', '));
+      renderTableHeaders();
+      // Pre-load tags for select/multiselect fields
+      state.fields.forEach(function(f) {
+        if (f.tipo === 'select' || f.tipo === 'multiselect') {
+          call('getTags', f.id).then(function(r) {
+            if (r && r.success) {
+              state.tags[f.id] = r.data || [];
+              console.log('[App] Etiquetas campo "'+f.nombre+'":', state.tags[f.id].length);
+            }
+          });
+        }
+      });
+    } else {
+      console.warn('[App] No se pudieron cargar campos:', res && res.error);
+    }
+  });
+}
+
+// ============================================================
+//  RENDER TABLE HEADERS
+// ============================================================
+function renderTableHeaders() {
+  var row  = document.getElementById('thead-row');
+  // Remove all dynamic cols (keep only the last "add" th)
+  var ths  = row.querySelectorAll('th');
+  for (var i = ths.length - 2; i >= 0; i--) { row.removeChild(ths[i]); }
+
+  var addTh = row.lastElementChild;
+  state.fields.forEach(function(f) {
+    if (!f.visible) return;
+    var isPinned = !!state.pinnedFields[f.id];
+    var th = document.createElement('th');
+    th.style.minWidth = '160px';
+    th.dataset.fieldId = f.id;
+    if (isPinned) { th.classList.add('col-pinned'); }
+    th.innerHTML = '<div class="th-inner">'
+      + (isPinned ? '<span style="font-size:10px;opacity:.5" title="Columna fija">📌</span>' : '')
+      + '<span class="field-type-icon">' + getTypeIcon(f.tipo) + '</span> ' + escHtml(f.nombre)
+      + '<span style="margin-left:auto;opacity:0;font-size:11px" class="th-edit">✏</span></div>';
+    th.title = f.tipo;
+    th.onmouseenter = function() { th.querySelector('.th-edit').style.opacity='.5'; };
+    th.onmouseleave = function() { th.querySelector('.th-edit').style.opacity='0'; };
+    th.querySelector('.th-edit').onclick = function(e) {
+      e.stopPropagation(); openEditFieldModal(f.id);
+    };
+    row.insertBefore(th, addTh);
+  });
+  setTimeout(updateStickyOffsets, 0);
+}
+
+// ============================================================
+//  LOAD RECORDS
+// ============================================================
+function loadRecords() {
+  var tbody = document.getElementById('tbody');
+  tbody.innerHTML = '<tr class="loading-row"><td colspan="20"><div class="spinner"></div> Cargando...</td></tr>';
+
+  var filters = Object.assign({}, state.filters, { search: state.searchQuery });
+  console.log('[App] Cargando registros con filtros:', JSON.stringify(filters));
+
+  call('getRecords', filters).then(function(res) {
+    if (res && res.success) {
+      state.records = res.data || [];
+      console.log('[App] Registros recibidos:', state.records.length);
+      renderTable();
+    } else {
+      console.error('[App] Error al cargar registros:', res && res.error);
+      tbody.innerHTML = '<tr class="loading-row"><td colspan="20" style="color:var(--red)">Error: ' + (res && res.error || 'desconocido') + '</td></tr>';
+    }
+  }).catch(function(e) {
+    console.error('[App] Error crítico en getRecords:', e);
+    tbody.innerHTML = '<tr class="loading-row"><td colspan="20" style="color:var(--red)">' + e + '</td></tr>';
+  });
+}
+
+// ============================================================
+//  RENDER TABLE BODY
+// ============================================================
+function renderTable() {
+  var tbody   = document.getElementById('tbody');
+  var fields  = state.fields.filter(function(f) { return f.visible; });
+  var records = state.records;
+
+  if (records.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="'+(fields.length+1)+'">'
+      + '<div class="empty-state"><div class="icon">🚀</div>'
+      + '<p>No hay registros aún</p>'
+      + '<small>Crea el primero con "+ Nuevo registro"</small></div></td></tr>';
+    return;
+  }
+
+  tbody.innerHTML = '';
+  records.forEach(function(rec) {
+    var tr = document.createElement('tr');
+    tr.style.cursor = 'pointer';
+    tr.onclick = function() { openRecordPanel(rec); };
+
+    // Dynamic fields
+    fields.forEach(function(f) {
+      var td = document.createElement('td');
+      td.innerHTML = renderCellValue(f, rec[f.id]);
+      if (state.pinnedFields[f.id]) { td.classList.add('col-pinned'); }
+      td.onclick = function(e) {
+        if (f.tipo === 'button') { e.stopPropagation(); triggerEmail(rec.id, f.id); }
+      };
+      tr.appendChild(td);
+    });
+
+    // Empty cell under "+ Campo"
+    var tdPlus = document.createElement('td');
+    tr.appendChild(tdPlus);
+
+    tbody.appendChild(tr);
+  });
+  setTimeout(updateStickyOffsets, 0);
+}
+
+// ============================================================
+//  CELL RENDERERS
+// ============================================================
+function renderCellValue(field, value) {
+  if (value === undefined || value === null || value === '') return '<span style="color:var(--g300)">–</span>';
+
+  switch(field.tipo) {
+    case 'date':
+      return '<span>' + formatDate(value) + '</span>';
+
+    case 'checkbox':
+      return value === true || value === 'true' || value === 'SI' || value === 'Si'
+        ? '<span class="checkbox-icon">✅</span>'
+        : '<span class="checkbox-icon">☐</span>';
+
+    case 'url':
+      return '<a class="url-link" href="' + escAttr(value) + '" target="_blank" onclick="event.stopPropagation()">🔗 Ver enlace</a>';
+
+    case 'email':
+      return '<a class="url-link" href="mailto:' + escAttr(value) + '" onclick="event.stopPropagation()">' + escHtml(value) + '</a>';
+
+    case 'emails':
+      return String(value).split(/[,;\n]/).filter(Boolean).map(function(e) {
+        return '<a class="url-link" href="mailto:'+escAttr(e.trim())+'" onclick="event.stopPropagation()" style="display:block;font-size:12px">'+escHtml(e.trim())+'</a>';
+      }).join('');
+
+    case 'select':
+      return renderTagChip(field.id, value);
+
+    case 'multiselect':
+      return String(value).split('||').map(function(v) {
+        return v.trim() ? renderTagChip(field.id, v.trim()) : '';
+      }).join('');
+
+    case 'person':
+      try {
+        var p = JSON.parse(value);
+        return renderPersonChip(p.email, p.name, p.photo);
+      } catch(e) { return escHtml(value); }
+
+    case 'multiperson':
+      try {
+        var ps = JSON.parse(value);
+        return ps.map(function(p) { return renderPersonChip(p.email, p.name, p.photo); }).join('');
+      } catch(e) { return escHtml(value); }
+
+    case 'button':
+      return '<button class="btn btn-secondary btn-sm" style="pointer-events:all" onclick="event.stopPropagation();triggerEmail(\''+escAttr(field._recordId||'')+'\',\''+escAttr(field.id)+'\')">'
+        + (field.config_boton && field.config_boton.label ? escHtml(field.config_boton.label) : '▶ Enviar')
+        + '</button>';
+
+    case 'number':
+      return '<span style="font-variant-numeric:tabular-nums">' + escHtml(value) + '</span>';
+
+    default:
+      return '<span class="cell-truncate" title="'+escAttr(value)+'">'+escHtml(value)+'</span>';
+  }
+}
+
+function renderTagChip(fieldId, value) {
+  var tags    = state.tags[fieldId] || [];
+  var matched = tags.filter(function(t) { return t.nombre === value; })[0];
+  if (matched) {
+    return '<span class="tag-chip" style="background:'+matched.color+';color:'+getContrastColor(matched.color)+'">'+escHtml(value)+'</span>';
+  }
+  return '<span class="tag-chip" style="background:var(--g200);color:var(--g700)">'+escHtml(value)+'</span>';
+}
+
+function renderPersonChip(email, name, photo) {
+  if (!email && !name) return '<span style="color:var(--g300)">–</span>';
+  var initial = (name || email || '?').charAt(0).toUpperCase();
+  var av = photo
+    ? '<div class="mini-avatar"><img src="'+escAttr(photo)+'" alt=""></div>'
+    : '<div class="mini-avatar">'+initial+'</div>';
+  return '<span class="person-chip">' + av + escHtml(name || email) + '</span>';
+}
+
+// ============================================================
+//  RECORD PANEL
+// ============================================================
+function openRecordPanel(rec) {
+  state.editingRecord = rec ? Object.assign({}, rec) : {};
+  var isNew = !rec;
+
+  document.getElementById('panelTitle').textContent = isNew ? 'Nuevo registro' : 'Editar registro';
+  document.getElementById('panelDeleteBtn').style.display = isNew ? 'none' : '';
+  document.getElementById('panelMeta').textContent = rec
+    ? 'Actualizado: ' + formatDate(rec.updated_at || rec.created_at)
+    : '';
+
+  renderPanelBody();
+  document.getElementById('recordPanel').classList.add('open');
+}
+
+function closeRecordPanel() {
+  document.getElementById('recordPanel').classList.remove('open');
+  state.editingRecord = null;
+}
+
+function renderPanelBody() {
+  var body   = document.getElementById('panelBody');
+  var rec    = state.editingRecord || {};
+  var fields = state.fields;
+  var html   = '';
+
+  fields.forEach(function(f) {
+    html += '<div class="panel-field">'
+      + '<div class="panel-field-label"><span class="type-icon">'+getTypeIcon(f.tipo)+'</span> '+escHtml(f.nombre)+'</div>'
+      + renderPanelInput(f, rec[f.id])
+      + '</div>';
+  });
+
+  if (fields.length === 0) {
+    html = '<p style="color:var(--g400);text-align:center;padding:20px 0">Agrega campos desde la tabla para empezar.</p>';
+  }
+
+  body.innerHTML = html;
+}
+
+function renderPanelInput(field, value) {
+  var v   = value !== undefined && value !== null ? value : '';
+  var id  = 'panel_' + field.id;
+
+  switch(field.tipo) {
+    case 'text':
+      return '<input type="text" class="form-input" id="'+id+'" value="'+escAttr(v)+'" oninput="updateFieldValue(\''+field.id+'\',this.value)">';
+
+    case 'textarea':
+      return '<textarea class="form-textarea" id="'+id+'" oninput="updateFieldValue(\''+field.id+'\',this.value)">'+escHtml(v)+'</textarea>';
+
+    case 'number':
+      return '<input type="number" class="form-input" id="'+id+'" value="'+escAttr(v)+'" oninput="updateFieldValue(\''+field.id+'\',this.value)">';
+
+    case 'date':
+      var dv = v ? new Date(v).toISOString().split('T')[0] : '';
+      return '<input type="date" class="form-input" id="'+id+'" value="'+escAttr(dv)+'" onchange="updateFieldValue(\''+field.id+'\',this.value)">';
+
+    case 'email':
+      return '<input type="email" class="form-input" id="'+id+'" value="'+escAttr(v)+'" oninput="updateFieldValue(\''+field.id+'\',this.value)" placeholder="correo@dominio.com">';
+
+    case 'emails':
+      return '<textarea class="form-textarea" id="'+id+'" oninput="updateFieldValue(\''+field.id+'\',this.value)" placeholder="Un correo por línea o separados por coma">'+escHtml(v)+'</textarea>';
+
+    case 'url':
+      return '<input type="url" class="form-input" id="'+id+'" value="'+escAttr(v)+'" oninput="updateFieldValue(\''+field.id+'\',this.value)" placeholder="https://">';
+
+    case 'checkbox':
+      var checked = v === true || v === 'true' || v === 'SI';
+      return '<label style="display:flex;align-items:center;gap:8px;cursor:pointer">'
+        + '<input type="checkbox" id="'+id+'" '+(checked?'checked':'')
+        + ' onchange="updateFieldValue(\''+field.id+'\',this.checked?\'SI\':\'NO\')" style="width:16px;height:16px;cursor:pointer">'
+        + '<span style="font-size:13px;color:var(--g600)">Marcar si aplica</span></label>';
+
+    case 'select': {
+      var tags = state.tags[field.id] || [];
+      var opts = '<option value="">— Selecciona —</option>';
+      tags.forEach(function(t) {
+        opts += '<option value="'+escAttr(t.nombre)+'"'+(v===t.nombre?' selected':'')+'>'+escHtml(t.nombre)+'</option>';
+      });
+      return '<select class="form-select" id="'+id+'" onchange="updateFieldValue(\''+field.id+'\',this.value)">'+opts+'</select>';
+    }
+
+    case 'multiselect': {
+      var tags2 = state.tags[field.id] || [];
+      var selVals = v ? String(v).split('||').map(function(x){return x.trim();}) : [];
+      var html2 = '<div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px" id="ms_chips_'+field.id+'"></div>';
+      html2 += '<div style="display:flex;flex-wrap:wrap;gap:6px">';
+      tags2.forEach(function(t) {
+        var isSel = selVals.indexOf(t.nombre) !== -1;
+        html2 += '<span onclick="toggleMultiTag(\''+field.id+'\',\''+escAttr(t.nombre)+'\')" '
+          + 'style="cursor:pointer;padding:3px 10px;border-radius:20px;font-size:12px;'
+          + 'background:'+t.color+';color:'+getContrastColor(t.color)+';'
+          + (isSel?'box-shadow:0 0 0 2px var(--g700)':'opacity:.6')+';">'
+          + escHtml(t.nombre)+'</span>';
+      });
+      html2 += '</div>';
+      return html2;
+    }
+
+    case 'person':
+    case 'multiperson': {
+      var isMulti = field.tipo === 'multiperson';
+      var persons = [];
+      try { persons = v ? (isMulti ? JSON.parse(v) : [JSON.parse(v)]) : []; } catch(e2){}
+      var chips = persons.map(function(p) {
+        return renderPersonChip(p.email, p.name, p.photo)
+          + '<span class="person-chip-remove" onclick="removePersonFromField(\''+field.id+'\',\''+escAttr(p.email)+'\')">×</span>';
+      }).join('');
+      return '<div>'
+        + '<div style="display:flex;flex-wrap:wrap;gap:4px;margin-bottom:8px" id="pc_'+field.id+'">' + chips + '</div>'
+        + '<button class="btn btn-secondary btn-sm" onclick="openPersonModal(\''+field.id+'\','+isMulti+')">'
+        + (isMulti ? '+ Agregar personas' : '+ Seleccionar persona') + '</button></div>';
+    }
+
+    case 'button':
+      return '<button class="btn btn-primary" onclick="triggerEmail(\''+escAttr(state.editingRecord&&state.editingRecord.id||'')+'\',\''+escAttr(field.id)+'\')">'
+        + '▶ ' + escHtml(field.config_boton && field.config_boton.label ? field.config_boton.label : 'Enviar correo')
+        + '</button>';
+
+    default:
+      return '<input type="text" class="form-input" id="'+id+'" value="'+escAttr(v)+'" oninput="updateFieldValue(\''+field.id+'\',this.value)">';
+  }
+}
+
+function updateFieldValue(fieldId, value) {
+  if (!state.editingRecord) state.editingRecord = {};
+  state.editingRecord[fieldId] = value;
+}
+
+function toggleMultiTag(fieldId, tagName) {
+  if (!state.editingRecord) state.editingRecord = {};
+  var current = state.editingRecord[fieldId] ? String(state.editingRecord[fieldId]).split('||').map(function(x){return x.trim();}).filter(Boolean) : [];
+  var idx = current.indexOf(tagName);
+  if (idx !== -1) { current.splice(idx, 1); } else { current.push(tagName); }
+  state.editingRecord[fieldId] = current.join('||');
+  renderPanelBody();
+  // Re-set values after re-render
+}
+
+function removePersonFromField(fieldId, email) {
+  if (!state.editingRecord) return;
+  var v = state.editingRecord[fieldId];
+  if (!v) return;
+  try {
+    var arr = JSON.parse(v);
+    arr = arr.filter(function(p) { return p.email !== email; });
+    state.editingRecord[fieldId] = arr.length > 0 ? JSON.stringify(arr) : '';
+  } catch(e) { state.editingRecord[fieldId] = ''; }
+  renderPanelBody();
+}
+
+function saveCurrentRecord() {
+  if (!state.editingRecord) return;
+  var isNew = !state.editingRecord.id;
+  console.log('[App] Guardando registro', isNew ? 'NUEVO' : state.editingRecord.id, state.editingRecord);
+  var btn = document.querySelector('.panel-footer .btn-primary');
+  btn.disabled = true;
+  btn.innerHTML = '<div class="spinner"></div>';
+
+  call('saveRecord', state.editingRecord).then(function(res) {
+    btn.disabled = false; btn.innerHTML = 'Guardar';
+    if (res && res.success) {
+      console.log('[App] Registro guardado OK. ID:', res.data && res.data.id);
+      showToast('Registro guardado', 'success');
+      closeRecordPanel();
+      loadRecords();
+    } else {
+      console.error('[App] Error al guardar registro:', res && res.error);
+      showToast('Error: ' + (res && res.error || 'desconocido'), 'error');
+    }
+  }).catch(function(e) {
+    console.error('[App] Error crítico al guardar registro:', e);
+    btn.disabled = false; btn.innerHTML = 'Guardar';
+    showToast('Error: ' + e, 'error');
+  });
+}
+
+function deleteCurrentRecord() {
+  if (!state.editingRecord || !state.editingRecord.id) return;
+  if (!confirm('¿Eliminar este registro? Esta acción no se puede deshacer.')) return;
+
+  call('deleteRecord', state.editingRecord.id).then(function(res) {
+    if (res && res.success) {
+      showToast('Registro eliminado', 'success');
+      closeRecordPanel();
+      loadRecords();
+    } else {
+      showToast('Error al eliminar', 'error');
+    }
+  });
+}
+
+// ============================================================
+//  FIELD MODAL
+// ============================================================
+function buildTypeGrid() {
+  var grid = document.getElementById('typeGrid');
+  grid.innerHTML = '';
+  FIELD_TYPES.forEach(function(t) {
+    var div = document.createElement('div');
+    div.className = 'type-card';
+    div.dataset.type = t.type;
+    div.innerHTML = '<div class="tc-icon">'+t.icon+'</div><div class="tc-label">'+t.label+'</div>';
+    div.onclick = function() { selectFieldType(t.type); };
+    grid.appendChild(div);
+  });
+}
+
+function selectFieldType(type) {
+  document.querySelectorAll('.type-card').forEach(function(c) { c.classList.remove('selected'); });
+  var card = document.querySelector('.type-card[data-type="'+type+'"]');
+  if (card) card.classList.add('selected');
+
+  // Show/hide sections
+  document.getElementById('tagsSection').style.display  = (type==='select'||type==='multiselect') ? '' : 'none';
+  document.getElementById('buttonSection').style.display = type==='button' ? '' : 'none';
+  document.getElementById('filtrableRow').style.display  = type==='button' ? 'none' : '';
+}
+
+function openAddFieldModal() {
+  state.editingField = null;
+  document.getElementById('fieldModalTitle').textContent = 'Nuevo campo';
+  document.getElementById('fieldName').value = '';
+  document.getElementById('fieldFiltrable').checked = true;
+  document.getElementById('deleteFieldBtn').style.display = 'none';
+  document.querySelectorAll('.type-card').forEach(function(c){ c.classList.remove('selected'); });
+  selectFieldType('text');
+  document.querySelector('.type-card[data-type="text"]').classList.add('selected');
+  document.getElementById('tagList').innerHTML = '';
+  document.getElementById('btnTargetField').innerHTML = '<option value="">— Selecciona un campo —</option>';
+  populateButtonFieldOptions();
+  openModal('fieldModal');
+}
+
+function openEditFieldModal(fieldId) {
+  var field = state.fields.filter(function(f) { return f.id === fieldId; })[0];
+  if (!field) return;
+  state.editingField = Object.assign({}, field);
+
+  document.getElementById('fieldModalTitle').textContent = 'Editar campo';
+  document.getElementById('fieldName').value = field.nombre;
+  document.getElementById('fieldFiltrable').checked = field.filtrable;
+  document.getElementById('deleteFieldBtn').style.display = '';
+
+  selectFieldType(field.tipo);
+  document.querySelectorAll('.type-card').forEach(function(c){ c.classList.remove('selected'); });
+  var card = document.querySelector('.type-card[data-type="'+field.tipo+'"]');
+  if (card) card.classList.add('selected');
+
+  // Load tags
+  if (field.tipo === 'select' || field.tipo === 'multiselect') {
+    call('getTags', field.id).then(function(res) {
+      var tags = res && res.success ? res.data : [];
+      state.tags[field.id] = tags;
+      renderTagList(tags);
+    });
+  }
+
+  // Button config
+  if (field.tipo === 'button' && field.config_boton) {
+    populateButtonFieldOptions();
+    setTimeout(function() {
+      document.getElementById('btnTargetField').value = field.config_boton.campo_destino || '';
+      document.getElementById('btnSubject').value     = field.config_boton.asunto || '';
+      document.getElementById('btnBody').value        = field.config_boton.cuerpo || '';
+      document.getElementById('btnLogField').value    = field.config_boton.campo_log || '';
+    }, 100);
+  }
+
+  openModal('fieldModal');
+}
+
+function populateButtonFieldOptions() {
+  var sel     = document.getElementById('btnTargetField');
+  var selLog  = document.getElementById('btnLogField');
+  sel.innerHTML    = '<option value="">— Selecciona un campo —</option>';
+  selLog.innerHTML = '<option value="">— No registrar —</option>';
+  state.fields.forEach(function(f) {
+    if (f.tipo === 'button') return;
+    sel.innerHTML    += '<option value="'+escAttr(f.id)+'">'+escHtml(f.nombre)+' ('+f.tipo+')</option>';
+    if (f.tipo === 'text' || f.tipo === 'textarea') {
+      selLog.innerHTML += '<option value="'+escAttr(f.id)+'">'+escHtml(f.nombre)+'</option>';
+    }
+  });
+}
+
+function closeFieldModal() { closeModal('fieldModal'); }
+
+function getSelectedType() {
+  var sel = document.querySelector('.type-card.selected');
+  return sel ? sel.dataset.type : 'text';
+}
+
+function saveCurrentField() {
+  var nombre = document.getElementById('fieldName').value.trim();
+  console.log('[App] Guardando campo:', nombre, '| tipo:', getSelectedType());
+  if (!nombre) { showToast('Escribe un nombre para el campo', 'error'); return; }
+
+  var tipo = getSelectedType();
+  var fieldData = {
+    id:        state.editingField ? state.editingField.id : null,
+    nombre:    nombre,
+    tipo:      tipo,
+    filtrable: document.getElementById('fieldFiltrable').checked,
+    visible:   true,
+    opciones:  []
+  };
+
+  // Button config
+  if (tipo === 'button') {
+    var targetField = document.getElementById('btnTargetField').value;
+    if (!targetField) { showToast('Selecciona el campo destino de correos', 'error'); return; }
+    fieldData.config_boton = {
+      accion:         'enviar_correo',
+      campo_destino:  targetField,
+      asunto:         document.getElementById('btnSubject').value,
+      cuerpo:         document.getElementById('btnBody').value,
+      campo_log:      document.getElementById('btnLogField').value,
+      label:          nombre
+    };
+  }
+
+  var btn = document.querySelector('#fieldModal .btn-primary');
+  btn.disabled = true;
+
+  call('saveField', fieldData).then(function(res) {
+    btn.disabled = false;
+    if (res && res.success) {
+      showToast('Campo guardado', 'success');
+      closeFieldModal();
+      // Save pending tags
+      savePendingTags(res.data.id, function() {
+        loadFields().then(function() { loadRecords(); });
+      });
+    } else {
+      showToast('Error: ' + (res && res.error || 'desconocido'), 'error');
+    }
+  }).catch(function(e) { btn.disabled=false; showToast('Error: '+e,'error'); });
+}
+
+function deleteCurrentField() {
+  if (!state.editingField) return;
+  if (!confirm('¿Eliminar el campo "' + state.editingField.nombre + '"? Los datos no se perderán pero el campo quedará oculto.')) return;
+
+  call('deleteField', state.editingField.id).then(function(res) {
+    if (res && res.success) {
+      showToast('Campo eliminado', 'success');
+      closeFieldModal();
+      loadFields().then(function() { loadRecords(); });
+    } else { showToast('Error al eliminar campo', 'error'); }
+  });
+}
+
+// ============================================================
+//  TAG MANAGEMENT
+// ============================================================
+var _pendingTags = [];
+
+function renderTagList(tags) {
+  _pendingTags = tags.map(function(t) { return Object.assign({}, t); });
+  _renderTagListFromPending();
+}
+
+function _renderTagListFromPending() {
+  var list = document.getElementById('tagList');
+  list.innerHTML = '';
+  _pendingTags.forEach(function(tag, idx) {
+    var div = document.createElement('div');
+    div.className = 'tag-item';
+    div.innerHTML =
+      '<div class="tag-color-btn" style="background:'+tag.color+'" onclick="openColorPicker('+idx+',this)"></div>'
+      + '<input class="tag-name-input" value="'+escAttr(tag.nombre)+'" placeholder="Nombre de etiqueta"'
+      + ' oninput="updatePendingTagName('+idx+',this.value)">'
+      + '<button class="tag-del" onclick="removePendingTag('+idx+')">×</button>';
+    list.appendChild(div);
+  });
+}
+
+function addNewTag() {
+  _pendingTags.push({
+    id: null, campo_id: state.editingField ? state.editingField.id : null,
+    nombre: '', color: TAG_COLORS[_pendingTags.length % TAG_COLORS.length].bg,
+    orden: _pendingTags.length + 1
+  });
+  _renderTagListFromPending();
+  var inputs = document.querySelectorAll('.tag-name-input');
+  if (inputs.length) inputs[inputs.length-1].focus();
+}
+
+function updatePendingTagName(idx, val) { _pendingTags[idx].nombre = val; }
+function removePendingTag(idx) { _pendingTags.splice(idx, 1); _renderTagListFromPending(); }
+
+function openColorPicker(idx, btn) {
+  var existing = document.getElementById('colorPickerPopup');
+  if (existing) existing.remove();
+  var popup = document.createElement('div');
+  popup.id = 'colorPickerPopup';
+  popup.className = 'color-palette';
+  popup.style.cssText = 'position:absolute;z-index:300;background:var(--white);'
+    + 'border:1px solid var(--g200);border-radius:var(--radius);padding:10px;box-shadow:var(--shadow-lg)';
+  TAG_COLORS.forEach(function(c) {
+    var dot = document.createElement('div');
+    dot.className = 'color-dot' + (_pendingTags[idx].color === c.bg ? ' selected' : '');
+    dot.style.background = c.bg;
+    dot.onclick = function() { _pendingTags[idx].color = c.bg; popup.remove(); _renderTagListFromPending(); };
+    popup.appendChild(dot);
+  });
+  var rect = btn.getBoundingClientRect();
+  popup.style.top  = (rect.bottom + window.scrollY + 4) + 'px';
+  popup.style.left = (rect.left + window.scrollX) + 'px';
+  document.body.appendChild(popup);
+  setTimeout(function() { document.addEventListener('click', function h(e) { if(!popup.contains(e.target)&&e.target!==btn){popup.remove();document.removeEventListener('click',h);}},true); },0);
+}
+
+function savePendingTags(fieldId, callback) {
+  var toSave = _pendingTags.filter(function(t){ return t.nombre.trim(); });
+  if (toSave.length === 0) { if(callback) callback(); return; }
+  var promises = toSave.map(function(tag) {
+    tag.campo_id = fieldId;
+    return call('saveTag', tag);
+  });
+  Promise.all(promises).then(function() {
+    call('getTags', fieldId).then(function(res) {
+      if (res && res.success) state.tags[fieldId] = res.data || [];
+      if (callback) callback();
+    });
+  });
+}
+
+// ============================================================
+//  FILTERS
+// ============================================================
+function openFiltersModal() {
+  var sel = document.getElementById('filterField');
+  sel.innerHTML = '<option value="">— Selecciona campo —</option>';
+  state.fields.filter(function(f){ return f.filtrable && f.tipo !== 'button'; }).forEach(function(f) {
+    sel.innerHTML += '<option value="'+escAttr(f.id)+'" data-type="'+f.tipo+'">'+escHtml(f.nombre)+'</option>';
+  });
+  document.getElementById('filterValueGroup').style.display = 'none';
+  document.getElementById('filterDateGroup').style.display  = 'none';
+  openModal('filtersModal');
+}
+
+function onFilterFieldChange() {
+  var sel     = document.getElementById('filterField');
+  var fieldId = sel.value;
+  var opt     = sel.options[sel.selectedIndex];
+  var tipo    = opt ? opt.dataset.type : '';
+
+  document.getElementById('filterValueGroup').style.display = '';
+  document.getElementById('filterDateGroup').style.display  = 'none';
+
+  var container = document.getElementById('filterValueContainer');
+
+  if (tipo === 'select' || tipo === 'multiselect') {
+    var tags = state.tags[fieldId] || [];
+    var html = '<div style="display:flex;flex-wrap:wrap;gap:6px">';
+    tags.forEach(function(t) {
+      html += '<span onclick="toggleFilterTag(this,\''+escAttr(t.nombre)+'\')" '
+        + 'style="cursor:pointer;padding:4px 12px;border-radius:20px;font-size:12px;'
+        + 'background:'+t.color+';color:'+getContrastColor(t.color)+';border:2px solid transparent">'
+        + escHtml(t.nombre) + '</span>';
+    });
+    html += '</div>';
+    container.innerHTML = html;
+  } else if (tipo === 'date') {
+    document.getElementById('filterValueGroup').style.display = 'none';
+    document.getElementById('filterDateGroup').style.display  = '';
+  } else if (tipo === 'checkbox') {
+    container.innerHTML = '<select class="form-select" id="filterCheckboxVal">'
+      + '<option value="SI">Si / Marcado</option>'
+      + '<option value="NO">No / Desmarcado</option>'
+      + '</select>';
+  } else {
+    container.innerHTML = '<input type="text" class="form-input" id="filterTextVal" placeholder="Escribe para filtrar...">';
+  }
+}
+
+function toggleFilterTag(el, tagName) {
+  var selected = el.style.borderColor === 'rgb(26, 32, 44)' || el.style.borderColor === 'var(--g900)';
+  el.style.borderColor = selected ? 'transparent' : 'var(--g900)';
+  el.style.opacity = selected ? '0.6' : '1';
+}
+
+function applyFilter() {
+  var fieldId = document.getElementById('filterField').value;
+  if (!fieldId) { closeModal('filtersModal'); return; }
+
+  var sel     = document.getElementById('filterField');
+  var opt     = sel.options[sel.selectedIndex];
+  var tipo    = opt ? opt.dataset.type : '';
+  var field   = state.fields.filter(function(f){ return f.id===fieldId; })[0];
+
+  var filterObj = { fieldId: fieldId };
+
+  if (tipo === 'select' || tipo === 'multiselect') {
+    var selected = Array.from(document.querySelectorAll('#filterValueContainer span'))
+      .filter(function(s) { return s.style.borderColor !== 'transparent' && s.style.borderColor !== ''; })
+      .map(function(s) { return s.textContent; });
+    filterObj.value = selected;
+  } else if (tipo === 'date') {
+    filterObj = {
+      dateFieldId: fieldId,
+      dateFrom: document.getElementById('filterDateFrom').value,
+      dateTo:   document.getElementById('filterDateTo').value
+    };
+  } else if (tipo === 'checkbox') {
+    filterObj.value = document.getElementById('filterCheckboxVal').value;
+  } else {
+    var textVal = document.getElementById('filterTextVal');
+    filterObj.value = textVal ? textVal.value : '';
+  }
+
+  state.filters = filterObj;
+  renderActiveFilters(field ? field.nombre : fieldId, filterObj.value || '');
+  closeModal('filtersModal');
+  loadRecords();
+}
+
+function renderActiveFilters(fieldName, value) {
+  var box = document.getElementById('activeFilters');
+  box.innerHTML = '';
+  if (!state.filters || Object.keys(state.filters).length === 0) return;
+
+  var displayVal = Array.isArray(value) ? value.join(', ') : String(value);
+  var chip = document.createElement('div');
+  chip.className = 'filter-chip';
+  chip.innerHTML = escHtml(fieldName) + ': <strong>' + escHtml(displayVal) + '</strong>'
+    + '<span class="rm" onclick="clearFilters()">×</span>';
+  box.appendChild(chip);
+}
+
+function clearFilters() {
+  state.filters = {};
+  document.getElementById('activeFilters').innerHTML = '';
+  closeModal('filtersModal');
+  loadRecords();
+}
+
+function onSearch(val) {
+  state.searchQuery = val;
+  clearTimeout(window._searchTimeout);
+  window._searchTimeout = setTimeout(loadRecords, 350);
+}
+
+// ============================================================
+//  PERSON PICKER
+// ============================================================
+function openPersonModal(fieldId, isMultiple) {
+  state.personCallback = fieldId;
+  state.personMultiple = isMultiple;
+
+  // Load current selected
+  var current = state.editingRecord && state.editingRecord[fieldId] ? state.editingRecord[fieldId] : '';
+  try {
+    state.personSelected = current ? (isMultiple ? JSON.parse(current) : [JSON.parse(current)]) : [];
+  } catch(e) { state.personSelected = []; }
+
+  document.getElementById('personModalTitle').textContent = isMultiple ? 'Seleccionar personas' : 'Seleccionar persona';
+  renderSelectedPersonsBox();
+  renderPersonList('');
+  document.getElementById('personSearch').value = '';
+  openModal('personModal');
+}
+
+function renderSelectedPersonsBox() {
+  var box = document.getElementById('selectedPersonsBox');
+  box.innerHTML = state.personSelected.map(function(p) {
+    return '<span class="person-chip" style="background:var(--primary-light)">'
+      + (p.photo ? '<div class="mini-avatar"><img src="'+escAttr(p.photo)+'" alt=""></div>' : '<div class="mini-avatar">'+p.name.charAt(0)+'</div>')
+      + escHtml(p.name)
+      + '<span class="person-chip-remove" onclick="removeSelectedPerson(\''+escAttr(p.email)+'\')">×</span>'
+      + '</span>';
+  }).join('') || '<span style="color:var(--g400);font-size:12px;padding:4px">Ninguna persona seleccionada</span>';
+}
+
+function removeSelectedPerson(email) {
+  state.personSelected = state.personSelected.filter(function(p) { return p.email !== email; });
+  renderSelectedPersonsBox();
+  renderPersonList(document.getElementById('personSearch').value);
+}
+
+function filterPersons(q) { renderPersonList(q); }
+
+function renderPersonList(q) {
+  var list  = document.getElementById('personList');
+  var users = state.wsUsers;
+
+  if (users.length === 0) {
+    list.innerHTML = '<div style="text-align:center;padding:16px;color:var(--g400)">No hay usuarios disponibles.<br><small>Verifica que la People API esté habilitada.</small></div>';
+    return;
+  }
+
+  var filtered = q ? users.filter(function(u) {
+    return u.name.toLowerCase().indexOf(q.toLowerCase()) !== -1
+      || u.email.toLowerCase().indexOf(q.toLowerCase()) !== -1;
+  }) : users;
+
+  if (filtered.length === 0) {
+    list.innerHTML = '<div style="text-align:center;padding:16px;color:var(--g400)">Sin resultados</div>';
+    return;
+  }
+
+  var selEmails = state.personSelected.map(function(p) { return p.email; });
+  list.innerHTML = filtered.slice(0, 80).map(function(u) {
+    var isSel = selEmails.indexOf(u.email) !== -1;
+    var av    = u.photo
+      ? '<div class="mini-avatar"><img src="'+escAttr(u.photo)+'" alt=""></div>'
+      : '<div class="mini-avatar">'+u.name.charAt(0)+'</div>';
+    return '<div class="person-item '+(isSel?'selected':'')+'" onclick="togglePersonSelection(\''+escAttr(JSON.stringify(u))+'\')">'
+      + '<div class="avatar" style="width:32px;height:32px;font-size:13px">'+(u.photo?'<img src="'+escAttr(u.photo)+'" alt="">':u.name.charAt(0))+'</div>'
+      + '<div><div class="p-name">'+escHtml(u.name)+'</div><div class="p-email">'+escHtml(u.email)+'</div></div>'
+      + (isSel ? '<span style="margin-left:auto;color:var(--primary);font-weight:600">✓</span>' : '')
+      + '</div>';
+  }).join('');
+}
+
+function togglePersonSelection(userJson) {
+  var u         = JSON.parse(userJson);
+  var selEmails = state.personSelected.map(function(p) { return p.email; });
+  var idx       = selEmails.indexOf(u.email);
+
+  if (idx !== -1) {
+    state.personSelected.splice(idx, 1);
+  } else {
+    if (!state.personMultiple) state.personSelected = [];
+    state.personSelected.push(u);
+  }
+  renderSelectedPersonsBox();
+  renderPersonList(document.getElementById('personSearch').value);
+}
+
+function confirmPersonSelection() {
+  var fieldId = state.personCallback;
+  if (!fieldId) { closeModal('personModal'); return; }
+  var value = state.personMultiple
+    ? JSON.stringify(state.personSelected)
+    : (state.personSelected.length > 0 ? JSON.stringify(state.personSelected[0]) : '');
+  updateFieldValue(fieldId, value);
+  renderPanelBody();
+  closeModal('personModal');
+}
+
+// ============================================================
+//  EMAIL BUTTON
+// ============================================================
+function triggerEmail(recordId, fieldId) {
+  if (!recordId) {
+    showToast('Guarda el registro primero antes de enviar el correo.', 'error');
+    return;
+  }
+  console.log('[App] Disparando botón de correo. recordId:', recordId, '| fieldId:', fieldId);
+  if (!confirm('¿Enviar el correo configurado para este registro?')) return;
+  showToast('Enviando correo...');
+
+  call('triggerButtonEmail', recordId, fieldId).then(function(res) {
+    if (res && res.success) {
+      console.log('[App] Correo enviado a:', res.data.emails, '| asunto:', res.data.subject);
+      showToast('Correo enviado a: ' + res.data.emails.join(', '), 'success');
+      loadRecords();
+    } else {
+      console.error('[App] Error al enviar correo:', res && res.error);
+      showToast('Error: ' + (res && res.error || 'desconocido'), 'error');
+    }
+  }).catch(function(e) {
+    console.error('[App] Error crítico al enviar correo:', e);
+    showToast('Error: ' + e, 'error');
+  });
+}
+
+// ============================================================
+//  AUDIT LOG
+// ============================================================
+function openAuditModal() {
+  openModal('auditModal');
+  call('getAuditLog', 40).then(function(res) {
+    var body = document.getElementById('auditBody');
+    if (!res || !res.success || res.data.length === 0) {
+      body.innerHTML = '<p style="text-align:center;color:var(--g400);padding:20px">Sin actividad registrada.</p>';
+      return;
+    }
+    var LABELS = {
+      'registro_creado': 'Creó un registro',
+      'registro_actualizado': 'Actualizó un registro',
+      'registro_eliminado': 'Eliminó un registro',
+      'email_enviado': 'Envió un correo',
+      'campo_guardado': 'Guardó un campo',
+      'campo_eliminado': 'Eliminó un campo'
+    };
+    body.innerHTML = res.data.map(function(log) {
+      return '<div class="audit-item">'
+        + '<div class="audit-avatar">' + (log.usuario_nombre||log.usuario_email||'?').charAt(0).toUpperCase() + '</div>'
+        + '<div class="audit-content">'
+        + '<div class="audit-action"><strong>' + escHtml(log.usuario_nombre||log.usuario_email) + '</strong> '
+        + escHtml(LABELS[log.accion] || log.accion) + '</div>'
+        + '<div class="audit-meta">' + formatDate(log.timestamp) + '</div>'
+        + '</div></div>';
+    }).join('');
+  });
+}
+
+// ============================================================
+//  HELPERS
+// ============================================================
+function openModal(id) {
+  var el = document.getElementById(id);
+  el.classList.remove('hidden');
+  setTimeout(function() { el.classList.add('show'); }, 10);
+}
+
+function closeModal(id) {
+  var el = document.getElementById(id);
+  el.classList.remove('show');
+  setTimeout(function() { el.classList.add('hidden'); }, 200);
+}
+
+function showToast(msg, type) {
+  var t = document.getElementById('toast');
+  t.textContent = msg;
+  t.className = type || '';
+  t.classList.add('show');
+  clearTimeout(window._toastTimer);
+  window._toastTimer = setTimeout(function() { t.classList.remove('show'); }, 3000);
+}
+
+function formatDate(v) {
+  if (!v) return '–';
+  var d = new Date(v);
+  if (isNaN(d)) return String(v);
+  return d.getDate().toString().padStart(2,'0') + '/'
+    + (d.getMonth()+1).toString().padStart(2,'0') + '/'
+    + d.getFullYear() + ' '
+    + d.getHours().toString().padStart(2,'0') + ':'
+    + d.getMinutes().toString().padStart(2,'0');
+}
+
+function getTypeIcon(tipo) {
+  var found = FIELD_TYPES.filter(function(t){ return t.type === tipo; })[0];
+  return found ? found.icon : 'Aa';
+}
+
+function getContrastColor(hex) {
+  if (!hex || hex.charAt(0) !== '#') return '#4A5568';
+  var r = parseInt(hex.slice(1,3),16), g = parseInt(hex.slice(3,5),16), b = parseInt(hex.slice(5,7),16);
+  var luminance = (0.299*r + 0.587*g + 0.114*b) / 255;
+  return luminance > 0.6 ? '#2D3748' : '#F7FAFC';
+}
+
+function escHtml(s) {
+  return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+function escAttr(s) { return escHtml(s); }
+
+// Close overlays on background click
+document.querySelectorAll('.overlay').forEach(function(ov) {
+  ov.addEventListener('click', function(e) {
+    if (e.target === ov) {
+      var id = ov.id;
+      if (id !== 'fieldModal') closeModal(id);
+    }
+  });
+});
+
+// ============================================================
+//  REORDER FIELDS
+// ============================================================
+function openReorderModal() {
+  var list = document.getElementById('reorderList');
+  list.innerHTML = '';
+  state.fields.forEach(function(f) {
+    var isPinned = !!state.pinnedFields[f.id];
+    var item = document.createElement('div');
+    item.draggable = true;
+    item.dataset.id = f.id;
+    item.style.cssText = 'display:flex;align-items:center;gap:10px;padding:10px 12px;'
+      + 'background:var(--white);border:1px solid var(--g200);border-radius:var(--radius);'
+      + 'cursor:grab;user-select:none;transition:background .1s;'
+      + (isPinned ? 'border-color:var(--primary);background:var(--primary-light);' : '');
+    item.innerHTML = '<span style="color:var(--g400);font-size:18px;line-height:1;cursor:grab">⠿</span>'
+      + '<span style="font-size:13px;font-weight:500;color:var(--g700);flex:1">'
+      + getTypeIcon(f.tipo) + ' ' + escHtml(f.nombre) + '</span>'
+      + '<button class="pin-btn" data-pinned="' + (isPinned ? 'true' : 'false') + '" '
+      + 'style="background:none;border:none;cursor:pointer;font-size:16px;padding:4px 6px;'
+      + 'border-radius:6px;opacity:' + (isPinned ? '1' : '.3') + ';transition:all .15s" '
+      + 'title="' + (isPinned ? 'Desfijar columna' : 'Fijar columna') + '">📌</button>';
+
+    // Pin toggle
+    item.querySelector('.pin-btn').addEventListener('click', function(e) {
+      e.stopPropagation();
+      var btn = e.currentTarget;
+      var pinned = btn.dataset.pinned === 'true';
+      btn.dataset.pinned = pinned ? 'false' : 'true';
+      btn.style.opacity = pinned ? '.3' : '1';
+      btn.title = pinned ? 'Fijar columna' : 'Desfijar columna';
+      item.style.borderColor = pinned ? '' : 'var(--primary)';
+      item.style.background  = pinned ? '' : 'var(--primary-light)';
+    });
+
+    item.addEventListener('dragstart', function(e) {
+      e.dataTransfer.effectAllowed = 'move';
+      e.dataTransfer.setData('text/plain', f.id);
+      item.style.opacity = '0.4';
+      list._dragging = item;
+    });
+    item.addEventListener('dragend', function() {
+      item.style.opacity = '1';
+      list._dragging = null;
+    });
+    item.addEventListener('dragover', function(e) {
+      e.preventDefault();
+      e.dataTransfer.dropEffect = 'move';
+      var dragging = list._dragging;
+      if (!dragging || dragging === item) return;
+      var rect = item.getBoundingClientRect();
+      if (e.clientY < rect.top + rect.height / 2) {
+        list.insertBefore(dragging, item);
+      } else {
+        list.insertBefore(dragging, item.nextSibling);
+      }
+    });
+    item.addEventListener('dragenter', function(e) { e.preventDefault(); });
+    list.appendChild(item);
+  });
+  openModal('reorderModal');
+}
+
+function saveFieldOrder() {
+  var items = document.getElementById('reorderList').children;
+  var orderedIds = [];
+  var newPinned  = {};
+  Array.prototype.forEach.call(items, function(el) {
+    orderedIds.push(el.dataset.id);
+    var btn = el.querySelector('.pin-btn');
+    if (btn && btn.dataset.pinned === 'true') { newPinned[el.dataset.id] = true; }
+  });
+
+  // Persistir estado de columnas fijas
+  state.pinnedFields = newPinned;
+  try { localStorage.setItem('bitacora_pinned', JSON.stringify(newPinned)); } catch(e) {}
+
+  showToast('Guardando orden...', '');
+  call('reorderFields', orderedIds).then(function(res) {
+    if (res && res.success) {
+      closeModal('reorderModal');
+      showToast('Orden guardado', 'success');
+      loadFields().then(function() { renderTable(); });
+    } else {
+      showToast('Error: ' + (res && res.error || 'desconocido'), 'error');
+    }
+  }).catch(function(e) {
+    showToast('Error al guardar orden', 'error');
+  });
+}
+
+function updateStickyOffsets() {
+  var headRow = document.getElementById('thead-row');
+  if (!headRow) return;
+  var ths = headRow.querySelectorAll('th');
+  var offset = 0;
+  var colOffsets = {};
+
+  ths.forEach(function(th, idx) {
+    if (th.classList.contains('col-pinned')) {
+      th.style.left = offset + 'px';
+      colOffsets[idx] = offset;
+      offset += (th.offsetWidth || 160);
+    }
+  });
+
+  document.querySelectorAll('#tbody tr').forEach(function(row) {
+    row.querySelectorAll('td').forEach(function(td, idx) {
+      if (td.classList.contains('col-pinned') && colOffsets[idx] !== undefined) {
+        td.style.left = colOffsets[idx] + 'px';
+      }
+    });
+  });
+}
+</script>
+</body>
+</html>

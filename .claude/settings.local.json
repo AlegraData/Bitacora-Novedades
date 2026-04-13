@@ -1,0 +1,19 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npx tsc:*)",
+      "Bash(npx prisma:*)",
+      "Bash(npm install:*)",
+      "Bash(npm run:*)",
+      "Bash(dir \"c:\\\\Users\\\\crist\\\\Documents\\\\Alegra\\\\app bitacora\\\\bitacora-app\")",
+      "Bash(cmd /c \"dir \\\\\"c:\\\\Users\\\\crist\\\\Documents\\\\Alegra\\\\app bitacora\\\\bitacora-app\\\\\"\")",
+      "Bash(powershell -Command \"Get-ChildItem 'C:\\\\Users\\\\crist\\\\Documents\\\\Alegra\\\\app bitacora' | Select-Object Name\")",
+      "Bash(powershell -Command \"Get-ChildItem 'C:\\\\Users\\\\crist\\\\Documents\\\\Alegra\\\\app bitacora\\\\prisma' | Select-Object Name\")",
+      "Bash(powershell -Command \"Get-ChildItem 'C:\\\\Users\\\\crist\\\\Documents\\\\Alegra\\\\app bitacora\\\\src\\\\app' | Select-Object Name\")",
+      "Bash(powershell -Command \"Get-Content 'C:\\\\Users\\\\crist\\\\Documents\\\\Alegra\\\\app bitacora\\\\package.json'\")",
+      "Bash(powershell -Command \"Get-Content 'C:\\\\Users\\\\crist\\\\Documents\\\\Alegra\\\\app bitacora\\\\.env.local'\")",
+      "Bash(node -e \"require\\('dotenv'\\).config\\({path:'.env.local'}\\); console.log\\('URL starts:', process.env.DATABASE_URL?.slice\\(0,60\\)\\)\")",
+      "Bash(dir \"c:\\\\Users\\\\crist\\\\Documents\\\\Alegra\\\\app bitacora\\\\node_modules\\\\@google\")"
+    ]
+  }
+}
