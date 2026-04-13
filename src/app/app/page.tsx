@@ -27,7 +27,7 @@ export default async function AppPage() {
   if (!userProfile) redirect('/auth/login')
 
   return (
-    <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column', background: '#f0f4f8' }}>
+    <div style={{ height: '100vh', display: 'flex', flexDirection: 'column', background: '#f0f4f8', overflow: 'hidden' }}>
       <Navbar
         userName={userProfile.name}
         userEmail={userProfile.email}
@@ -35,7 +35,7 @@ export default async function AppPage() {
         userRole={userProfile.role}
       />
 
-      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+      <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
         <RecordsTable
           fields={fields}
           records={records}

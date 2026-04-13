@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useTransition, useCallback } from 'react'
+import { useState, useTransition, useCallback, useEffect } from 'react'
 import type { Field, BitacoraRecord, Tag, FilterState, Role } from '@/types'
 import { saveRecord, deleteRecord } from '@/lib/actions/records'
 import { saveField, deleteField, reorderFields } from '@/lib/actions/fields'
@@ -23,19 +23,39 @@ const FIELD_TYPE_ICONS: Record<string, string> = {
   checkbox: '☑',
 }
 
+const AVATAR_COLORS = ['#6366f1','#8b5cf6','#ec4899','#f59e0b','#10b981','#3b82f6','#14b8a6','#f97316']
+
+function avatarColor(name: string): string {
+  let h = 0
+  for (const c of name) h = (h * 31 + c.charCodeAt(0)) & 0xff
+  return AVATAR_COLORS[h % AVATAR_COLORS.length]
+}
+
+function tagTextColor(hex: string): string {
+  const h = hex.replace('#', '').padEnd(6, '0')
+  const r = parseInt(h.slice(0, 2), 16) || 0
+  const g = parseInt(h.slice(2, 4), 16) || 0
+  const b = parseInt(h.slice(4, 6), 16) || 0
+  return (0.299 * r + 0.587 * g + 0.114 * b) / 255 > 0.58 ? '#374151' : '#ffffff'
+}
+
 function TagChip({ tag }: { tag: Tag }) {
+  const isNeutral = tag.color === '#e2e8f0' || tag.color === '#f0f4f8'
+  const bg = isNeutral ? '#f1f5f9' : tag.color
+  const text = isNeutral ? '#475569' : tagTextColor(tag.color)
   return (
     <span style={{
       display: 'inline-flex',
       alignItems: 'center',
-      padding: '2px 8px',
+      padding: '3px 10px',
       borderRadius: 20,
-      fontSize: 12,
-      fontWeight: 500,
-      background: tag.color + '33',
-      color: tag.color === '#e2e8f0' ? '#4a5568' : tag.color,
-      border: `1px solid ${tag.color}66`,
-      margin: '1px',
+      fontSize: 11,
+      fontWeight: 600,
+      letterSpacing: '0.01em',
+      background: bg,
+      color: text,
+      margin: '2px',
+      whiteSpace: 'nowrap',
     }}>
       {tag.name}
     </span>
@@ -72,49 +92,78 @@ function CellValue({
       )
     }
     case 'checkbox':
-      return <span style={{ fontSize: 16 }}>{value ? '✅' : '⬜'}</span>
+      return (
+        <span style={{
+          display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+          width: 20, height: 20, borderRadius: 5,
+          background: value ? '#00C4A0' : '#e2e8f0',
+          color: '#fff', fontSize: 12, fontWeight: 700, flexShrink: 0,
+        }}>
+          {value ? '✓' : ''}
+        </span>
+      )
     case 'url':
       return (
         <a href={String(value)} target="_blank" rel="noopener noreferrer"
-          style={{ color: '#00C4A0', textDecoration: 'none', fontSize: 12 }}>
-          {String(value).replace(/^https?:\/\//, '')}
+          style={{
+            color: '#0ea5e9', textDecoration: 'none', fontSize: 12,
+            display: 'inline-flex', alignItems: 'center', gap: 3,
+            maxWidth: 180, overflow: 'hidden',
+          }}>
+          <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+            {String(value).replace(/^https?:\/\//, '').replace(/\/$/, '')}
+          </span>
+          <span style={{ fontSize: 10, opacity: 0.6, flexShrink: 0 }}>↗</span>
         </a>
       )
     case 'person': {
       const names = Array.isArray(value) ? value : String(value).split(',').map((v) => v.trim())
       return (
-        <span style={{ display: 'flex', flexWrap: 'wrap', gap: 2 }}>
-          {names.map((n, i) => (
-            <span key={i} style={{
-              display: 'inline-flex', alignItems: 'center', gap: 4,
-              padding: '2px 8px 2px 4px', borderRadius: 20,
-              background: '#f0f4f8', fontSize: 12,
-            }}>
-              <span style={{
-                width: 18, height: 18, borderRadius: '50%',
-                background: '#00C4A0', display: 'inline-flex',
-                alignItems: 'center', justifyContent: 'center',
-                fontSize: 9, fontWeight: 600, color: '#fff',
+        <span style={{ display: 'flex', flexWrap: 'wrap', gap: 3 }}>
+          {names.map((n, i) => {
+            const color = avatarColor(n)
+            return (
+              <span key={i} style={{
+                display: 'inline-flex', alignItems: 'center', gap: 5,
+                padding: '2px 8px 2px 3px', borderRadius: 20,
+                background: color + '15', fontSize: 12, color: '#374151',
+                border: `1px solid ${color}30`,
               }}>
-                {n.charAt(0).toUpperCase()}
+                <span style={{
+                  width: 20, height: 20, borderRadius: '50%',
+                  background: color, display: 'inline-flex',
+                  alignItems: 'center', justifyContent: 'center',
+                  fontSize: 9, fontWeight: 700, color: '#fff', flexShrink: 0,
+                }}>
+                  {n.charAt(0).toUpperCase()}
+                </span>
+                {n}
               </span>
-              {n}
-            </span>
-          ))}
+            )
+          })}
         </span>
       )
     }
     case 'date':
       try {
-        return <span>{new Date(String(value)).toLocaleDateString('es-CO')}</span>
+        const d = new Date(String(value))
+        return (
+          <span style={{
+            display: 'inline-flex', alignItems: 'center', gap: 5,
+            color: '#64748b', fontSize: 12, whiteSpace: 'nowrap',
+          }}>
+            <span style={{ fontSize: 13 }}>📅</span>
+            {d.toLocaleDateString('es-CO', { day: '2-digit', month: 'short', year: 'numeric' })}
+          </span>
+        )
       } catch {
-        return <span>{String(value)}</span>
+        return <span style={{ fontSize: 12, color: '#64748b' }}>{String(value)}</span>
       }
     case 'textarea':
       return (
         <span style={{
           display: 'block', whiteSpace: 'nowrap', overflow: 'hidden',
-          textOverflow: 'ellipsis', maxWidth: 200,
+          textOverflow: 'ellipsis', maxWidth: 220, color: '#374151', fontSize: 13,
         }} title={String(value)}>
           {String(value)}
         </span>
@@ -123,12 +172,97 @@ function CellValue({
       return (
         <span style={{
           display: 'block', whiteSpace: 'nowrap', overflow: 'hidden',
-          textOverflow: 'ellipsis', maxWidth: 200,
+          textOverflow: 'ellipsis', maxWidth: 220, color: '#374151', fontSize: 13,
         }}>
           {String(value)}
         </span>
       )
   }
+}
+
+function pageNavBtn(disabled: boolean): React.CSSProperties {
+  return {
+    display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+    width: 32, height: 32, borderRadius: 6, fontSize: 15, lineHeight: 1,
+    background: 'transparent', border: '1px solid #e2e8f0',
+    color: disabled ? '#cbd5e1' : '#374151',
+    cursor: disabled ? 'default' : 'pointer',
+  }
+}
+
+function pageNumBtn(active: boolean): React.CSSProperties {
+  return {
+    display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+    width: 32, height: 32, borderRadius: 6, fontSize: 13,
+    fontWeight: active ? 700 : 400,
+    background: active ? '#00C4A0' : 'transparent',
+    color: active ? '#fff' : '#374151',
+    border: active ? 'none' : '1px solid #e2e8f0',
+    cursor: active ? 'default' : 'pointer',
+  }
+}
+
+function buildPageRange(current: number, total: number): (number | '…')[] {
+  if (total <= 7) return Array.from({ length: total }, (_, i) => i + 1)
+  const pages: (number | '…')[] = [1]
+  if (current > 3) pages.push('…')
+  for (let i = Math.max(2, current - 1); i <= Math.min(total - 1, current + 1); i++) pages.push(i)
+  if (current < total - 2) pages.push('…')
+  pages.push(total)
+  return pages
+}
+
+function PaginationBar({
+  currentPage, totalPages, pageSize, filteredCount, totalCount, onPageChange, onPageSizeChange,
+}: {
+  currentPage: number; totalPages: number; pageSize: number
+  filteredCount: number; totalCount: number
+  onPageChange: (p: number) => void; onPageSizeChange: (s: number) => void
+}) {
+  const from = filteredCount === 0 ? 0 : (currentPage - 1) * pageSize + 1
+  const to = Math.min(currentPage * pageSize, filteredCount)
+  const pages = buildPageRange(currentPage, totalPages)
+
+  return (
+    <div style={{
+      display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+      padding: '10px 20px', borderTop: '1px solid #e8edf2',
+      background: '#fff', flexShrink: 0, gap: 12,
+    }}>
+      {/* Info + page size selector */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10, fontSize: 13, color: '#64748b', flexWrap: 'wrap' }}>
+        <span>
+          {from}–{to} de <strong style={{ color: '#374151' }}>{filteredCount}</strong> registros
+          {filteredCount !== totalCount && <span style={{ color: '#94a3b8' }}> (total {totalCount})</span>}
+        </span>
+        <span style={{ color: '#e2e8f0' }}>│</span>
+        <span>Filas por página</span>
+        <select
+          value={pageSize}
+          onChange={(e) => onPageSizeChange(Number(e.target.value))}
+          style={{
+            padding: '3px 8px', border: '1px solid #e2e8f0', borderRadius: 6,
+            fontSize: 12, color: '#374151', background: '#fff', cursor: 'pointer', outline: 'none',
+          }}
+        >
+          {[10, 25, 50, 100].map((s) => <option key={s} value={s}>{s}</option>)}
+        </select>
+      </div>
+
+      {/* Page navigation */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+        <button onClick={() => onPageChange(1)} disabled={currentPage === 1} style={pageNavBtn(currentPage === 1)}>«</button>
+        <button onClick={() => onPageChange(currentPage - 1)} disabled={currentPage === 1} style={pageNavBtn(currentPage === 1)}>‹</button>
+        {pages.map((p, i) =>
+          p === '…'
+            ? <span key={`e${i}`} style={{ padding: '0 4px', color: '#94a3b8', fontSize: 13, userSelect: 'none' }}>…</span>
+            : <button key={p} onClick={() => onPageChange(p as number)} style={pageNumBtn(p === currentPage)}>{p}</button>
+        )}
+        <button onClick={() => onPageChange(currentPage + 1)} disabled={currentPage === totalPages} style={pageNavBtn(currentPage === totalPages)}>›</button>
+        <button onClick={() => onPageChange(totalPages)} disabled={currentPage === totalPages} style={pageNavBtn(currentPage === totalPages)}>»</button>
+      </div>
+    </div>
+  )
 }
 
 interface RecordsTableProps {
@@ -163,6 +297,10 @@ export function RecordsTable({
   const [filterFieldId, setFilterFieldId] = useState('')
   const [filterValue, setFilterValue] = useState('')
 
+  // Pagination
+  const [currentPage, setCurrentPage] = useState(1)
+  const [pageSize, setPageSize] = useState(25)
+
   const canEdit = userRole === 'ADMIN' || userRole === 'MANAGER'
   const isAdmin = userRole === 'ADMIN'
 
@@ -177,6 +315,13 @@ export function RecordsTable({
       String(r.data[filterFieldId] ?? '').toLowerCase().includes(filterValue.toLowerCase())
     return matchSearch && matchFilter
   })
+
+  // Reset to page 1 when filters change
+  useEffect(() => { setCurrentPage(1) }, [search, filterFieldId, filterValue])
+
+  const totalPages = Math.max(1, Math.ceil(filteredRecords.length / pageSize))
+  const clampedPage = Math.min(currentPage, totalPages)
+  const paginatedRecords = filteredRecords.slice((clampedPage - 1) * pageSize, clampedPage * pageSize)
 
   function fieldCanEdit(field: Field) {
     if (!canEdit) return false
@@ -387,23 +532,23 @@ export function RecordsTable({
         </div>
       </div>
 
-      {/* Count */}
-      <div style={{ padding: '6px 20px', fontSize: 12, color: '#a0aec0', flexShrink: 0 }}>
-        {filteredRecords.length} registro{filteredRecords.length !== 1 ? 's' : ''}
-        {filteredRecords.length !== records.length && ` (de ${records.length})`}
-        {isPending && <span style={{ marginLeft: 8, color: '#00C4A0' }}>Guardando...</span>}
-      </div>
+      {isPending && (
+        <div style={{ padding: '4px 20px', fontSize: 12, color: '#00C4A0', flexShrink: 0 }}>
+          Guardando…
+        </div>
+      )}
 
       {/* Table */}
-      <div style={{ flex: 1, overflow: 'auto', padding: '0 20px 20px' }}>
+      <div style={{ flex: 1, minHeight: 0, overflow: 'auto', padding: '0 20px 20px' }}>
         <div style={{
           background: '#fff',
           borderRadius: 12,
-          boxShadow: '0 2px 8px rgba(0,0,0,0.08)',
-          overflow: 'hidden',
+          boxShadow: '0 1px 3px rgba(0,0,0,0.06), 0 4px 16px rgba(0,0,0,0.06)',
+          border: '1px solid #e8edf2',
+          overflow: 'clip',
           minWidth: 'fit-content',
         }}>
-          <table style={{ width: '100%', borderCollapse: 'collapse', tableLayout: 'auto' }}>
+          <table style={{ width: '100%', borderCollapse: 'separate', borderSpacing: 0, tableLayout: 'auto' }}>
             <thead>
               <tr style={{ background: '#1e2a3a' }}>
                 <th style={thStyle}>
@@ -458,13 +603,19 @@ export function RecordsTable({
                   </td>
                 </tr>
               ) : (
-                filteredRecords.map((record) => (
-                  <tr key={record.id} style={{ borderBottom: '1px solid #f0f4f8' }}
-                    onMouseEnter={(e) => (e.currentTarget.style.background = '#f7fafc')}
-                    onMouseLeave={(e) => (e.currentTarget.style.background = '')}
+                paginatedRecords.map((record, rowIdx) => (
+                  <tr key={record.id}
+                    style={{ borderBottom: '1px solid #edf2f7', background: rowIdx % 2 === 1 ? '#fafbfc' : '#fff' }}
+                    onMouseEnter={(e) => (e.currentTarget.style.background = '#f0fdfa')}
+                    onMouseLeave={(e) => (e.currentTarget.style.background = rowIdx % 2 === 1 ? '#fafbfc' : '#fff')}
                   >
-                    <td style={{ ...tdStyle, color: '#a0aec0', fontSize: 11, fontFamily: 'monospace', whiteSpace: 'nowrap' }}>
-                      {record.id.slice(0, 8)}…
+                    <td style={{ ...tdStyle, whiteSpace: 'nowrap' }}>
+                      <code style={{
+                        fontSize: 10, color: '#94a3b8', background: '#f1f5f9',
+                        padding: '2px 6px', borderRadius: 4, fontFamily: 'monospace',
+                      }}>
+                        {record.id.slice(0, 8)}
+                      </code>
                     </td>
                     {visibleFields.map((field) => (
                       <td key={field.id} style={tdStyle}>
@@ -517,6 +668,17 @@ export function RecordsTable({
         </div>
       </div>
 
+      {/* Pagination */}
+      <PaginationBar
+        currentPage={clampedPage}
+        totalPages={totalPages}
+        pageSize={pageSize}
+        filteredCount={filteredRecords.length}
+        totalCount={records.length}
+        onPageChange={setCurrentPage}
+        onPageSizeChange={(s) => { setPageSize(s); setCurrentPage(1) }}
+      />
+
       {/* Record Editor Modal */}
       {editingRecord !== null && (
         <RecordEditor
@@ -560,31 +722,38 @@ export function RecordsTable({
 }
 
 const thStyle: React.CSSProperties = {
-  padding: '10px 14px',
+  padding: '11px 16px',
   textAlign: 'left',
-  fontSize: 12,
-  fontWeight: 600,
-  color: '#a0aec0',
+  fontSize: 11,
+  fontWeight: 700,
+  color: '#94a3b8',
   whiteSpace: 'nowrap',
   userSelect: 'none',
-  borderRight: '1px solid rgba(255,255,255,0.06)',
+  borderRight: '1px solid rgba(255,255,255,0.07)',
+  position: 'sticky',
+  top: 0,
+  background: '#1e2a3a',
+  zIndex: 1,
+  letterSpacing: '0.06em',
+  textTransform: 'uppercase',
 }
 
 const tdStyle: React.CSSProperties = {
-  padding: '9px 14px',
+  padding: '11px 16px',
   verticalAlign: 'middle',
   fontSize: 13,
-  color: '#4a5568',
-  borderRight: '1px solid #f0f4f8',
+  color: '#374151',
+  borderRight: '1px solid #f1f5f9',
   maxWidth: 280,
 }
 
 const actionBtnStyle: React.CSSProperties = {
-  background: '#fff',
+  background: 'transparent',
   border: '1px solid #e2e8f0',
-  color: '#4a5568',
+  color: '#64748b',
   padding: '4px 10px',
   borderRadius: 6,
   cursor: 'pointer',
-  fontSize: 12,
+  fontSize: 11,
+  fontWeight: 500,
 }

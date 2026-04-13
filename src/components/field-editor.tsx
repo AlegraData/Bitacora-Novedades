@@ -81,7 +81,11 @@ export function FieldEditor({
         type,
         isFilterable,
         isVisible,
-        config: isButton ? { ...config, action: 'send_email' } : null,
+        config: isButton
+          ? { ...config, action: 'send_email' }
+          : type === 'person'
+          ? { multiple: config.multiple !== 'false' }
+          : null,
       })
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Error al guardar')
@@ -185,6 +189,18 @@ export function FieldEditor({
                 onChange={setIsFilterable}
               />
             </div>
+
+            {/* Person config */}
+            {type === 'person' && (
+              <div style={{ marginBottom: 18, padding: 16, background: '#f7fafc', borderRadius: 8, border: '1px solid #e2e8f0' }}>
+                <label style={{ ...labelStyle, marginBottom: 12 }}>Configuración del campo persona</label>
+                <ToggleRow
+                  label="Permite seleccionar múltiples personas"
+                  checked={config.multiple !== 'false'}
+                  onChange={(v) => setConfig((prev) => ({ ...prev, multiple: String(v) }))}
+                />
+              </div>
+            )}
 
             {/* Button config */}
             {isButton && (

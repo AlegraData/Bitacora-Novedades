@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import type { Field, BitacoraRecord, Tag, Role, RecordData } from '@/types'
+import { PersonPicker } from './person-picker'
 
 interface RecordEditorProps {
   record: BitacoraRecord | null
@@ -21,9 +22,10 @@ export function RecordEditor({ record, fields, tags, userRole, onSave, onClose }
   const visibleFields = fields.filter((f) => f.isVisible && f.type !== 'button')
 
   function canEditField(field: Field) {
+    if (userRole === 'ADMIN') return true
     const perm = field.permissions.find((p) => p.role === userRole)
     if (perm) return perm.canEdit
-    return userRole === 'ADMIN' || userRole === 'MANAGER'
+    return userRole === 'MANAGER'
   }
 
   function setField(fieldId: string, value: unknown) {
@@ -162,44 +164,15 @@ export function RecordEditor({ record, fields, tags, userRole, onSave, onClose }
       }
       case 'person': {
         const selected = Array.isArray(value) ? value : String(value ?? '').split(',').map(v => v.trim()).filter(Boolean)
+        const personConfig = field.config as { multiple?: boolean } | null
+        const max = personConfig?.multiple === false ? 1 : undefined
         return (
-          <div>
-            <input
-              type="text"
-              placeholder="Escribe un nombre y presiona Enter"
-              disabled={!editable}
-              style={commonStyle}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter' && editable) {
-                  e.preventDefault()
-                  const val = (e.target as HTMLInputElement).value.trim()
-                  if (val && !selected.includes(val)) {
-                    setField(field.id, [...selected, val])
-                    ;(e.target as HTMLInputElement).value = ''
-                  }
-                }
-              }}
-            />
-            {selected.length > 0 && (
-              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, marginTop: 6 }}>
-                {selected.map((name) => (
-                  <span key={name} style={{
-                    display: 'inline-flex', alignItems: 'center', gap: 4,
-                    padding: '2px 8px', borderRadius: 20, background: '#f0f4f8',
-                    fontSize: 12,
-                  }}>
-                    {name}
-                    {editable && (
-                      <button type="button" onClick={() => setField(field.id, selected.filter(n => n !== name))}
-                        style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#a0aec0', fontSize: 12 }}>
-                        ×
-                      </button>
-                    )}
-                  </span>
-                ))}
-              </div>
-            )}
-          </div>
+          <PersonPicker
+            value={selected}
+            onChange={(v) => setField(field.id, v)}
+            disabled={!editable}
+            max={max}
+          />
         )
       }
       default:

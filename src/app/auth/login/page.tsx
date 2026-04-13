@@ -20,6 +20,10 @@ export default async function LoginPage({
       provider: 'google',
       options: {
         redirectTo: `${origin}/auth/callback${next ? `?next=${encodeURIComponent(next)}` : ''}`,
+        scopes: [
+          'https://www.googleapis.com/auth/directory.readonly',
+          'https://www.googleapis.com/auth/contacts.readonly',
+        ].join(' '),
       },
     })
 

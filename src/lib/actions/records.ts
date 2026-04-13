@@ -2,23 +2,11 @@
 
 import { revalidatePath } from 'next/cache'
 import { prisma } from '@/lib/prisma'
-import { createClient } from '@/lib/supabase/server'
+import { requireUser, requireManager, requireAdmin } from '@/lib/auth-utils'
 import type { BitacoraRecord, RecordData, FilterState } from '@/types'
 import { addAuditLog } from './audit'
-
-async function getCurrentUser() {
-  const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) throw new Error('No autenticado')
-
-  const dbUser = await prisma.user.findUnique({ where: { email: user.email! } })
-  return {
-    id: dbUser?.id ?? null,
-    email: user.email!,
-    name: dbUser?.name ?? user.user_metadata?.full_name ?? user.email!.split('@')[0],
-    role: dbUser?.role ?? 'VIEWER',
-  }
-}
+import { updateRecordEmbedding } from './ai'
+import type { Prisma } from '@/generated/prisma'
 
 function toRecord(r: {
   id: string
@@ -39,26 +27,37 @@ function toRecord(r: {
 }
 
 export async function getRecords(filters?: Partial<FilterState>): Promise<BitacoraRecord[]> {
-  const raw = await prisma.record.findMany({ orderBy: { createdAt: 'desc' } })
+  await requireUser()
+
+  const where: Prisma.RecordWhereInput = {}
+
+  if (filters?.fieldId && filters.value !== undefined && filters.value !== '') {
+    // Filtrado nativo de JSONB en PostgreSQL vía Prisma
+    where.data = {
+      path: [filters.fieldId],
+      string_contains: filters.value,
+    }
+  }
+
+  // Nota: El filtrado global 'search' en todas las llaves del JSONB 
+  // es complejo en Prisma sin raw SQL. Por ahora optimizamos el filtrado por campo.
+  
+  const raw = await prisma.record.findMany({ 
+    where,
+    orderBy: { createdAt: 'desc' } 
+  })
+  
   let records = raw.map(toRecord)
 
-  if (!filters) return records
-
-  if (filters.search) {
+  // Filtros adicionales que aún requieren procesamiento en memoria o lógica compleja
+  if (filters?.search) {
     const q = filters.search.toLowerCase()
     records = records.filter((r) =>
       Object.values(r.data).some((v) => String(v ?? '').toLowerCase().includes(q))
     )
   }
 
-  if (filters.fieldId && filters.value !== undefined && filters.value !== '') {
-    records = records.filter((r) => {
-      const val = String(r.data[filters.fieldId!] ?? '')
-      return val.toLowerCase().includes(filters.value!.toLowerCase())
-    })
-  }
-
-  if (filters.dateFrom && filters.dateTo && filters.dateFieldId) {
+  if (filters?.dateFrom && filters?.dateTo && filters?.dateFieldId) {
     const from = new Date(filters.dateFrom)
     const to = new Date(filters.dateTo)
     records = records.filter((r) => {
@@ -71,6 +70,7 @@ export async function getRecords(filters?: Partial<FilterState>): Promise<Bitaco
 }
 
 export async function getRecord(id: string): Promise<BitacoraRecord | null> {
+  await requireUser()
   const r = await prisma.record.findUnique({ where: { id } })
   return r ? toRecord(r) : null
 }
@@ -79,7 +79,7 @@ export async function saveRecord(data: {
   id?: string
   recordData: RecordData
 }): Promise<BitacoraRecord> {
-  const user = await getCurrentUser()
+  const user = await requireManager()
   const isNew = !data.id
 
   const record = isNew
@@ -103,12 +103,19 @@ export async function saveRecord(data: {
     recordId: record.id,
   })
 
+  // Generar embedding en segundo plano
+  try {
+    await updateRecordEmbedding(record.id, record.data as Record<string, unknown>)
+  } catch (error) {
+    console.error('Error al generar embedding:', error)
+  }
+
   revalidatePath('/app')
   return toRecord(record)
 }
 
 export async function deleteRecord(recordId: string): Promise<void> {
-  const user = await getCurrentUser()
+  const user = await requireAdmin()
   await prisma.record.delete({ where: { id: recordId } })
   await addAuditLog({
     userId: user.id,

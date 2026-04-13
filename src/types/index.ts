@@ -20,6 +20,10 @@ export interface ButtonConfig {
   logFieldId?: string    // optional field to log send history
 }
 
+export interface PersonConfig {
+  multiple?: boolean  // false = single person only (default: true)
+}
+
 export interface Field {
   id: string
   name: string
@@ -27,7 +31,7 @@ export interface Field {
   order: number
   isFilterable: boolean
   isVisible: boolean
-  config?: ButtonConfig | null
+  config?: ButtonConfig | PersonConfig | null
   options: Tag[]
   permissions: FieldPermission[]
   createdAt: string
