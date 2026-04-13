@@ -46,8 +46,16 @@ export interface Tag {
   order: number
 }
 
+export type BlockType = 'paragraph' | 'bold' | 'divider'
+
+export interface Block {
+  id: string
+  type: BlockType
+  content?: string
+}
+
 export interface RecordData {
-  [fieldId: string]: string | number | boolean | string[] | null
+  [fieldId: string]: string | number | boolean | string[] | Block[] | null
 }
 
 export interface BitacoraRecord {

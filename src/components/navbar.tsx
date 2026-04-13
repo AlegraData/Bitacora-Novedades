@@ -3,6 +3,7 @@
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
+import { useState, useEffect, useRef } from 'react'
 import type { Role } from '@/types'
 
 interface NavbarProps {
@@ -24,13 +25,59 @@ const AlegraLogo = () => (
 export function Navbar({ userName, userEmail, userImage, userRole }: NavbarProps) {
   const router = useRouter()
   const supabase = createClient()
+  
+  // States for export dropdown logic
+  const [selectedIds, setSelectedIds] = useState<string>('')
+  const [exportMenuOpen, setExportMenuOpen] = useState<'csv' | 'xlsx' | null>(null)
+  const menuRef = useRef<HTMLDivElement>(null)
 
   const initials = (userName || userEmail).split(' ').map((w) => w[0]).join('').slice(0, 2).toUpperCase()
+
+  useEffect(() => {
+    const handleSelectionChange = (e: Event) => {
+      const customEvent = e as CustomEvent<string>
+      setSelectedIds(customEvent.detail)
+    }
+    window.addEventListener('bitacora-selection-change', handleSelectionChange)
+    return () => window.removeEventListener('bitacora-selection-change', handleSelectionChange)
+  }, [])
+
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
+        setExportMenuOpen(null)
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [])
 
   async function handleSignOut() {
     await supabase.auth.signOut()
     router.push('/auth/login')
   }
+
+  function doExport(format: 'csv' | 'xlsx', onlySelected: boolean) {
+    const url = `/api/export?format=${format}${onlySelected && selectedIds ? `&ids=${selectedIds}` : ''}`
+    window.open(url)
+    setExportMenuOpen(null)
+  }
+
+  const btnStyle: React.CSSProperties = {
+    background: 'transparent',
+    border: '1px solid rgba(255,255,255,0.15)',
+    color: '#a0aec0',
+    padding: '5px 12px',
+    borderRadius: 6,
+    cursor: 'pointer',
+    fontSize: 12,
+    position: 'relative',
+    display: 'inline-flex',
+    alignItems: 'center',
+    gap: 6,
+  }
+
+  const count = selectedIds ? selectedIds.split(',').length : 0
 
   return (
     <nav style={{
@@ -58,56 +105,67 @@ export function Navbar({ userName, userEmail, userImage, userRole }: NavbarProps
         </Link>
       </div>
 
-      <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12 }} ref={menuRef}>
         {userRole === 'ADMIN' && (
           <Link
             href="/admin"
-            style={{
-              background: 'transparent',
-              border: '1px solid rgba(255,255,255,0.15)',
-              color: '#a0aec0',
-              padding: '5px 12px',
-              borderRadius: 6,
-              cursor: 'pointer',
-              fontSize: 12,
-              textDecoration: 'none',
-            }}
+            style={{ ...btnStyle, textDecoration: 'none' }}
           >
             Admin
           </Link>
         )}
 
-        <button
-          onClick={() => window.open('/api/export?format=csv')}
-          style={{
-            background: 'transparent',
-            border: '1px solid rgba(255,255,255,0.15)',
-            color: '#a0aec0',
-            padding: '5px 12px',
-            borderRadius: 6,
-            cursor: 'pointer',
-            fontSize: 12,
-          }}
-        >
-          Exportar CSV
-        </button>
+        {/* Dropdown export Buttons */}
+        {(['csv', 'xlsx'] as const).map((format) => (
+          <div key={format} style={{ position: 'relative' }}>
+            <button
+              onClick={() => {
+                if (count > 0) setExportMenuOpen(exportMenuOpen === format ? null : format)
+                else doExport(format, false)
+              }}
+              style={btnStyle}
+            >
+              Exportar {format === 'csv' ? 'CSV' : 'Excel'}
+              {count > 0 && <span style={{ fontSize: 10, opacity: 0.6 }}>▾</span>}
+            </button>
 
-        <button
-          onClick={() => window.open('/api/export?format=xlsx')}
-          style={{
-            background: 'transparent',
-            border: '1px solid rgba(255,255,255,0.15)',
-            color: '#a0aec0',
-            padding: '5px 12px',
-            borderRadius: 6,
-            cursor: 'pointer',
-            fontSize: 12,
-          }}
-        >
-          Exportar Excel
-        </button>
+            {/* Submenu if selected items exist */}
+            {exportMenuOpen === format && count > 0 && (
+              <div style={{
+                position: 'absolute', top: '100%', right: 0, marginTop: 4,
+                background: '#fff', border: '1px solid #e2e8f0', borderRadius: 8,
+                boxShadow: '0 4px 16px rgba(0,0,0,0.1)', overflow: 'hidden', minWidth: 160, zIndex: 110,
+              }}>
+                <button
+                  onClick={() => doExport(format, true)}
+                  style={{
+                    display: 'block', width: '100%', padding: '10px 14px', textAlign: 'left',
+                    background: 'none', border: 'none', borderBottom: '1px solid #e2e8f0',
+                    cursor: 'pointer', fontSize: 13, color: '#1a202c', fontWeight: 500,
+                  }}
+                  onMouseEnter={(e) => e.currentTarget.style.background = '#f8fafc'}
+                  onMouseLeave={(e) => e.currentTarget.style.background = 'none'}
+                >
+                  Exportar selección ({count})
+                </button>
+                <button
+                  onClick={() => doExport(format, false)}
+                  style={{
+                    display: 'block', width: '100%', padding: '10px 14px', textAlign: 'left',
+                    background: 'none', border: 'none',
+                    cursor: 'pointer', fontSize: 13, color: '#4a5568',
+                  }}
+                  onMouseEnter={(e) => e.currentTarget.style.background = '#f8fafc'}
+                  onMouseLeave={(e) => e.currentTarget.style.background = 'none'}
+                >
+                  Exportar todo
+                </button>
+              </div>
+            )}
+          </div>
+        ))}
 
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginLeft: 8 }}>
           <div style={{
             width: 30,
             height: 30,

@@ -5,10 +5,17 @@ import * as XLSX from 'xlsx'
 export async function GET(request: NextRequest) {
   const { searchParams } = request.nextUrl
   const format = searchParams.get('format') ?? 'csv'
+  const idsParam = searchParams.get('ids')
+  const ids = idsParam ? idsParam.split(',') : null
+
+  const where = ids ? { id: { in: ids } } : {}
 
   const [rawFields, rawRecords] = await Promise.all([
     prisma.field.findMany({ orderBy: { order: 'asc' } }),
-    prisma.record.findMany({ orderBy: { createdAt: 'desc' } }),
+    prisma.record.findMany({ 
+      where,
+      orderBy: { createdAt: 'desc' } 
+    }),
   ])
 
   const visibleFields = rawFields.filter((f) => f.isVisible && f.type !== 'button')

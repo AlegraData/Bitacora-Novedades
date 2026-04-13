@@ -106,19 +106,20 @@ export function FieldEditor({
   }
 
   return (
-    <div
-      style={{
-        position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.45)',
-        zIndex: 200, display: 'flex', alignItems: 'flex-start',
-        justifyContent: 'center', paddingTop: 60,
-      }}
-      onClick={(e) => { if (e.target === e.currentTarget) onClose() }}
-    >
+    <>
+      <div
+        style={{
+          position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.45)',
+          zIndex: 200, display: 'flex', alignItems: 'flex-start',
+          justifyContent: 'center', paddingTop: 60,
+        }}
+        onClick={(e) => { if (e.target === e.currentTarget) onClose() }}
+      />
       <div style={{
-        background: '#fff', borderRadius: 12,
-        boxShadow: '0 8px 32px rgba(0,0,0,0.14)',
-        width: '100%', maxWidth: 560,
-        maxHeight: 'calc(100vh - 120px)',
+        position: 'fixed', top: 0, right: 0, bottom: 0, zIndex: 301,
+        width: 'min(720px, 62vw)',
+        background: '#fff',
+        boxShadow: '-6px 0 40px rgba(15,23,42,0.14)',
         display: 'flex', flexDirection: 'column',
       }}>
         {/* Header */}
@@ -360,7 +361,7 @@ export function FieldEditor({
           </div>
         </form>
       </div>
-    </div>
+    </>
   )
 }
 

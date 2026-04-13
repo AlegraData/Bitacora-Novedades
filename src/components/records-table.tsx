@@ -7,6 +7,7 @@ import { saveField, deleteField, reorderFields } from '@/lib/actions/fields'
 import { saveTag, deleteTag } from '@/lib/actions/tags'
 import { triggerButtonEmail } from '@/lib/actions/email'
 import { RecordEditor } from './record-editor'
+import { RecordDetail } from './record-detail'
 import { FieldEditor } from './field-editor'
 import { Chatbot } from './chatbot'
 
@@ -37,6 +38,33 @@ function tagTextColor(hex: string): string {
   const g = parseInt(h.slice(2, 4), 16) || 0
   const b = parseInt(h.slice(4, 6), 16) || 0
   return (0.299 * r + 0.587 * g + 0.114 * b) / 255 > 0.58 ? '#374151' : '#ffffff'
+}
+
+function TitleCell({ record, field, onClick }: { record: BitacoraRecord, field: Field, onClick: () => void }) {
+  const [hovered, setHovered] = useState(false)
+  return (
+    <div
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
+      style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', minHeight: 28, gap: 8 }}
+    >
+      <span style={{ display: 'block', maxWidth: hovered ? 120 : 240, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontWeight: 500, color: '#1e40af' }}>
+        {String(record.data[field.id] ?? '—')}
+      </span>
+      {hovered && (
+        <button
+          onClick={onClick}
+          style={{
+            padding: '4px 8px', background: '#e0e7ff', color: '#4338ca',
+            border: '1px solid #c7d2fe', borderRadius: 6, cursor: 'pointer',
+            fontSize: 11, fontWeight: 500, whiteSpace: 'nowrap'
+          }}
+        >
+          Ver en ventana lateral
+        </button>
+      )}
+    </div>
+  )
 }
 
 function TagChip({ tag }: { tag: Tag }) {
@@ -287,10 +315,25 @@ export function RecordsTable({
   const [tags, setTags] = useState<Tag[]>(initialTags)
   const [isPending, startTransition] = useTransition()
 
-  // Modals
+  // Modals / panels
   const [editingRecord, setEditingRecord] = useState<BitacoraRecord | null | 'new'>(null)
+  const [detailRecord, setDetailRecord] = useState<BitacoraRecord | null>(null)
   const [editingField, setEditingField] = useState<Field | null | 'new'>(null)
   const [showChatbot, setShowChatbot] = useState(false)
+
+  // Column drag-to-reorder
+  const [dragFieldId, setDragFieldId] = useState<string | null>(null)
+  const [dragOverFieldId, setDragOverFieldId] = useState<string | null>(null)
+  const [dragPosition, setDragPosition] = useState<'left' | 'right' | null>(null)
+
+  // Selection
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
+
+  // Sync selection with Navbar via window event
+  useEffect(() => {
+    const ids = Array.from(selectedIds).join(',')
+    window.dispatchEvent(new CustomEvent('bitacora-selection-change', { detail: ids }))
+  }, [selectedIds])
 
   // Filters
   const [search, setSearch] = useState('')
@@ -305,6 +348,11 @@ export function RecordsTable({
   const isAdmin = userRole === 'ADMIN'
 
   const visibleFields = fields_.filter((f) => f.isVisible)
+
+  // First text-like field is treated as the "title"
+  const titleFieldId = visibleFields.find((f) =>
+    ['título', 'title', 'nombre', 'name'].includes(f.name.toLowerCase())
+  )?.id ?? visibleFields[0]?.id
 
   // Filter records
   const filteredRecords = records.filter((r) => {
@@ -409,6 +457,21 @@ export function RecordsTable({
     })
   }, [])
 
+  const toggleAll = () => {
+    if (selectedIds.size === filteredRecords.length) {
+      setSelectedIds(new Set())
+    } else {
+      setSelectedIds(new Set(filteredRecords.map(r => r.id)))
+    }
+  }
+
+  const toggleOne = (id: string) => {
+    const next = new Set(selectedIds)
+    if (next.has(id)) next.delete(id)
+    else next.add(id)
+    setSelectedIds(next)
+  }
+
   const activeFilters = (filterFieldId && filterValue)
     ? [{ fieldId: filterFieldId, value: filterValue, label: `${fields_.find(f => f.id === filterFieldId)?.name}: ${filterValue}` }]
     : []
@@ -503,6 +566,16 @@ export function RecordsTable({
         </div>
 
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          {selectedIds.size > 0 && (
+            <div style={{ display: 'flex', gap: 6, alignItems: 'center', padding: '0 10px', borderRight: '1px solid #e2e8f0', marginRight: 10 }}>
+              <span style={{ fontSize: 12, color: '#64748b', fontWeight: 600 }}>{selectedIds.size} seleccionados</span>
+              <button
+                onClick={() => setSelectedIds(new Set())}
+                style={{ background: 'none', border: 'none', color: '#ef4444', fontSize: 12, cursor: 'pointer', fontWeight: 500 }}
+              >Limpiar</button>
+            </div>
+          )}
+
           <button
             onClick={() => setShowChatbot(true)}
             style={{
@@ -550,25 +623,80 @@ export function RecordsTable({
         }}>
           <table style={{ width: '100%', borderCollapse: 'separate', borderSpacing: 0, tableLayout: 'auto' }}>
             <thead>
-              <tr style={{ background: '#1e2a3a' }}>
-                <th style={thStyle}>
-                  <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                    ID
-                  </span>
+              <tr>
+                <th style={{ ...thStyle, width: 40, padding: '0 0 0 16px' }}>
+                  <input
+                    type="checkbox"
+                    checked={filteredRecords.length > 0 && selectedIds.size === filteredRecords.length}
+                    onChange={toggleAll}
+                    style={{ width: 16, height: 16, accentColor: '#00C4A0', cursor: 'pointer' }}
+                  />
                 </th>
                 {visibleFields.map((field) => (
-                  <th key={field.id} style={thStyle}>
-                    <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                      <span style={{ fontSize: 10, opacity: 0.6 }}>{FIELD_TYPE_ICONS[field.type] ?? 'T'}</span>
+                  <th
+                    key={field.id}
+                    draggable={isAdmin}
+                    onDragStart={(e) => {
+                      setDragFieldId(field.id)
+                      if (e.dataTransfer) e.dataTransfer.effectAllowed = 'move'
+                    }}
+                    onDragOver={(e) => {
+                      e.preventDefault()
+                      if (!dragFieldId || dragFieldId === field.id) return
+                      setDragOverFieldId(field.id)
+                      const rect = e.currentTarget.getBoundingClientRect()
+                      const isLeft = e.clientX - rect.left < rect.width / 2
+                      setDragPosition(isLeft ? 'left' : 'right')
+                    }}
+                    onDragLeave={() => {
+                      setDragOverFieldId(null)
+                      setDragPosition(null)
+                    }}
+                    onDrop={(e) => {
+                      e.preventDefault()
+                      if (!dragFieldId || dragFieldId === field.id || !dragPosition) {
+                        setDragFieldId(null); setDragOverFieldId(null); setDragPosition(null); return
+                      }
+                      const allIds = fields_.map((f) => f.id)
+                      const fromIdx = allIds.indexOf(dragFieldId)
+                      let toIdx = allIds.indexOf(field.id)
+                      if (dragPosition === 'right') toIdx += 1
+                      if (fromIdx < toIdx) toIdx -= 1
+                      const next = [...allIds]
+                      next.splice(fromIdx, 1); next.splice(toIdx, 0, dragFieldId)
+                      startTransition(async () => {
+                        await reorderFields(next)
+                        setFields((prev) => {
+                          const map = new Map(prev.map((f) => [f.id, f]))
+                          return next.map((id, i) => ({ ...map.get(id)!, order: i + 1 }))
+                        })
+                      })
+                      setDragFieldId(null); setDragOverFieldId(null); setDragPosition(null)
+                    }}
+                    onDragEnd={() => {
+                      setDragFieldId(null); setDragOverFieldId(null); setDragPosition(null)
+                    }}
+                    style={{
+                      ...thStyle,
+                      background: dragFieldId === field.id ? '#f8fafc' : thStyle.background,
+                      opacity: dragFieldId === field.id ? 0.3 : 1,
+                      borderLeft: dragOverFieldId === field.id && dragPosition === 'left' ? '3px solid #00C4A0' : thStyle.borderLeft,
+                      borderRight: dragOverFieldId === field.id && dragPosition === 'right' ? '3px solid #00C4A0' : thStyle.borderRight,
+                      paddingLeft: dragOverFieldId === field.id && dragPosition === 'left' ? 13 : thStyle.paddingLeft,
+                      paddingRight: dragOverFieldId === field.id && dragPosition === 'right' ? 13 : thStyle.paddingRight,
+                      transition: 'border 0.1s, padding 0.1s',
+                    }}
+                  >
+                    <span style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+                      {isAdmin && (
+                        <span style={{ color: '#cbd5e1', fontSize: 12, cursor: 'grab', lineHeight: 1 }} title="Arrastra para reordenar">⠿</span>
+                      )}
+                      <span style={{ fontSize: 10, color: '#94a3b8' }}>{FIELD_TYPE_ICONS[field.type] ?? 'T'}</span>
                       {field.name}
                       {isAdmin && (
                         <button
                           onClick={() => setEditingField(field)}
-                          style={{
-                            background: 'none', border: 'none', cursor: 'pointer',
-                            color: '#a0aec0', fontSize: 11, padding: '0 2px',
-                            opacity: 0.5,
-                          }}
+                          style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#cbd5e1', fontSize: 11, padding: '0 2px' }}
                           title="Editar campo"
                         >✏️</button>
                       )}
@@ -576,11 +704,7 @@ export function RecordsTable({
                   </th>
                 ))}
                 {isAdmin && (
-                  <th
-                    style={{ ...thStyle, cursor: 'pointer' }}
-                    onClick={() => setEditingField('new')}
-                    title="Agregar campo"
-                  >
+                  <th style={{ ...thStyle, cursor: 'pointer' }} onClick={() => setEditingField('new')} title="Agregar campo">
                     + Campo
                   </th>
                 )}
@@ -595,27 +719,25 @@ export function RecordsTable({
                     <div style={{ fontSize: 15, color: '#718096', marginBottom: 4 }}>
                       {records.length === 0 ? 'No hay registros aún' : 'Sin resultados para los filtros aplicados'}
                     </div>
-                    {canEdit && records.length === 0 && (
-                      <div style={{ fontSize: 13, color: '#a0aec0' }}>
-                        Haz clic en &quot;Nuevo registro&quot; para comenzar
-                      </div>
-                    )}
                   </td>
                 </tr>
               ) : (
                 paginatedRecords.map((record, rowIdx) => (
                   <tr key={record.id}
-                    style={{ borderBottom: '1px solid #edf2f7', background: rowIdx % 2 === 1 ? '#fafbfc' : '#fff' }}
+                    style={{ 
+                      borderBottom: '1px solid #edf2f7', 
+                      background: selectedIds.has(record.id) ? '#f0fdfa' : (rowIdx % 2 === 1 ? '#fafbfc' : '#fff') 
+                    }}
                     onMouseEnter={(e) => (e.currentTarget.style.background = '#f0fdfa')}
-                    onMouseLeave={(e) => (e.currentTarget.style.background = rowIdx % 2 === 1 ? '#fafbfc' : '#fff')}
+                    onMouseLeave={(e) => (e.currentTarget.style.background = selectedIds.has(record.id) ? '#f0fdfa' : (rowIdx % 2 === 1 ? '#fafbfc' : '#fff'))}
                   >
-                    <td style={{ ...tdStyle, whiteSpace: 'nowrap' }}>
-                      <code style={{
-                        fontSize: 10, color: '#94a3b8', background: '#f1f5f9',
-                        padding: '2px 6px', borderRadius: 4, fontFamily: 'monospace',
-                      }}>
-                        {record.id.slice(0, 8)}
-                      </code>
+                    <td style={{ ...tdStyle, width: 40, padding: '0 0 0 16px' }}>
+                      <input
+                        type="checkbox"
+                        checked={selectedIds.has(record.id)}
+                        onChange={() => toggleOne(record.id)}
+                        style={{ width: 16, height: 16, accentColor: '#00C4A0', cursor: 'pointer' }}
+                      />
                     </td>
                     {visibleFields.map((field) => (
                       <td key={field.id} style={tdStyle}>
@@ -624,18 +746,14 @@ export function RecordsTable({
                             onClick={() => handleTriggerButton(record.id, field.id)}
                             disabled={isPending}
                             style={{
-                              padding: '4px 12px',
-                              background: '#E0F7F4',
-                              color: '#00A888',
-                              border: '1px solid #00C4A0',
-                              borderRadius: 6,
-                              cursor: 'pointer',
-                              fontSize: 12,
-                              fontWeight: 500,
+                              padding: '4px 12px', background: '#E0F7F4', color: '#00A888',
+                              border: '1px solid #00C4A0', borderRadius: 6, cursor: 'pointer', fontSize: 12, fontWeight: 500,
                             }}
                           >
                             ⚡ {field.name}
                           </button>
+                        ) : field.id === titleFieldId ? (
+                          <TitleCell record={record} field={field} onClick={() => setDetailRecord(record)} />
                         ) : (
                           <CellValue field={field} value={record.data[field.id]} allTags={tags} />
                         )}
@@ -643,11 +761,8 @@ export function RecordsTable({
                     ))}
                     {isAdmin && <td style={tdStyle} />}
                     <td style={{ ...tdStyle, whiteSpace: 'nowrap' }}>
-                      {(canEdit && fieldCanEdit(visibleFields[0] ?? fields_[0])) && (
-                        <button
-                          onClick={() => setEditingRecord(record)}
-                          style={actionBtnStyle}
-                        >
+                      {canEdit && (
+                        <button onClick={() => setEditingRecord(record)} style={actionBtnStyle}>
                           Editar
                         </button>
                       )}
@@ -679,7 +794,21 @@ export function RecordsTable({
         onPageSizeChange={(s) => { setPageSize(s); setCurrentPage(1) }}
       />
 
-      {/* Record Editor Modal */}
+      {/* Panels / Modals */}
+      {detailRecord !== null && (
+        <RecordDetail
+          record={detailRecord}
+          fields={fields_}
+          tags={tags}
+          userRole={userRole}
+          onSave={async (data) => {
+            await handleSaveRecord(data)
+            setDetailRecord((prev) => prev ? { ...prev, data: data.recordData } : null)
+          }}
+          onClose={() => setDetailRecord(null)}
+        />
+      )}
+
       {editingRecord !== null && (
         <RecordEditor
           record={editingRecord === 'new' ? null : editingRecord}
@@ -694,7 +823,6 @@ export function RecordsTable({
         />
       )}
 
-      {/* Field Editor Modal */}
       {editingField !== null && (
         <FieldEditor
           field={editingField === 'new' ? null : editingField}
@@ -713,28 +841,26 @@ export function RecordsTable({
         />
       )}
 
-      {/* Chatbot */}
-      {showChatbot && (
-        <Chatbot onClose={() => setShowChatbot(false)} />
-      )}
+      {showChatbot && <Chatbot onClose={() => setShowChatbot(false)} />}
     </>
   )
 }
 
 const thStyle: React.CSSProperties = {
-  padding: '11px 16px',
+  padding: '10px 16px',
   textAlign: 'left',
   fontSize: 11,
-  fontWeight: 700,
-  color: '#94a3b8',
+  fontWeight: 600,
+  color: '#64748b',
   whiteSpace: 'nowrap',
   userSelect: 'none',
-  borderRight: '1px solid rgba(255,255,255,0.07)',
+  borderRight: '1px solid #f1f5f9',
+  borderBottom: '2px solid #e2e8f0',
   position: 'sticky',
   top: 0,
-  background: '#1e2a3a',
+  background: '#f8fafc',
   zIndex: 1,
-  letterSpacing: '0.06em',
+  letterSpacing: '0.05em',
   textTransform: 'uppercase',
 }
 

@@ -1,8 +1,10 @@
 'use client'
 
 import { useState } from 'react'
-import type { Field, BitacoraRecord, Tag, Role, RecordData } from '@/types'
+import type { Field, BitacoraRecord, Tag, Role, RecordData, Block } from '@/types'
 import { PersonPicker } from './person-picker'
+
+function uid() { return Math.random().toString(36).slice(2, 10) }
 
 interface RecordEditorProps {
   record: BitacoraRecord | null
@@ -16,6 +18,10 @@ interface RecordEditorProps {
 export function RecordEditor({ record, fields, tags, userRole, onSave, onClose }: RecordEditorProps) {
   const isNew = !record
   const [formData, setFormData] = useState<RecordData>(record?.data ?? {})
+  const [blocks, setBlocks] = useState<Block[]>(() => {
+    const raw = record?.data?.['__blocks__']
+    return Array.isArray(raw) ? (raw as Block[]) : []
+  })
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
 
@@ -32,12 +38,16 @@ export function RecordEditor({ record, fields, tags, userRole, onSave, onClose }
     setFormData((prev) => ({ ...prev, [fieldId]: value as RecordData[string] }))
   }
 
+  function addBlock(type: Block['type']) {
+    setBlocks((prev) => [...prev, { id: uid(), type, content: type === 'divider' ? '' : '' }])
+  }
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     setSaving(true)
     setError('')
     try {
-      await onSave({ id: record?.id, recordData: formData })
+      await onSave({ id: record?.id, recordData: { ...formData, __blocks__: blocks as RecordData[string] } })
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Error al guardar')
     } finally {
@@ -189,18 +199,17 @@ export function RecordEditor({ record, fields, tags, userRole, onSave, onClose }
   }
 
   return (
-    <div style={{
-      position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.45)',
-      zIndex: 200, display: 'flex', alignItems: 'flex-start',
-      justifyContent: 'center', paddingTop: 60,
-    }}
-      onClick={(e) => { if (e.target === e.currentTarget) onClose() }}
-    >
+    <>
+      <div onClick={onClose} style={{
+        position: 'fixed', inset: 0, zIndex: 300,
+        background: 'rgba(15,23,42,0.25)',
+      }} />
+
       <div style={{
-        background: '#fff', borderRadius: 12,
-        boxShadow: '0 8px 32px rgba(0,0,0,0.14)',
-        width: '100%', maxWidth: 560,
-        maxHeight: 'calc(100vh - 120px)',
+        position: 'fixed', top: 0, right: 0, bottom: 0, zIndex: 301,
+        width: 'min(720px, 62vw)',
+        background: '#fff',
+        boxShadow: '-6px 0 40px rgba(15,23,42,0.14)',
         display: 'flex', flexDirection: 'column',
       }}>
         {/* Header */}
@@ -215,7 +224,7 @@ export function RecordEditor({ record, fields, tags, userRole, onSave, onClose }
           </h3>
           <button onClick={onClose} style={{
             background: 'none', border: 'none', cursor: 'pointer',
-            color: '#a0aec0', fontSize: 20, lineHeight: 1, padding: 4,
+            color: '#a0aec0', fontSize: 24, lineHeight: 1, padding: '4px 8px',
           }}>×</button>
         </div>
 
@@ -240,6 +249,56 @@ export function RecordEditor({ record, fields, tags, userRole, onSave, onClose }
                 No hay campos configurados. Un administrador debe agregar campos primero.
               </div>
             )}
+
+            {/* Content / Blocks */}
+            <div style={{ marginTop: 32, marginBottom: 24 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 20 }}>
+                <span style={{ fontSize: 11, fontWeight: 600, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.05em', whiteSpace: 'nowrap' }}>
+                  Contenido
+                </span>
+                <div style={{ flex: 1, height: 1, background: '#e2e8f0' }} />
+              </div>
+
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 2, marginBottom: 16 }}>
+                {blocks.map((block, idx) => (
+                  <BlockRow
+                    key={block.id}
+                    block={block}
+                    onUpdate={(content) =>
+                      setBlocks((prev) => prev.map((b) => b.id === block.id ? { ...b, content } : b))
+                    }
+                    onDelete={() => setBlocks((prev) => prev.filter((b) => b.id !== block.id))}
+                    onMoveUp={idx > 0 ? () => setBlocks((prev) => {
+                      const next = [...prev]; [next[idx - 1], next[idx]] = [next[idx], next[idx - 1]]; return next
+                    }) : undefined}
+                    onMoveDown={idx < blocks.length - 1 ? () => setBlocks((prev) => {
+                      const next = [...prev]; [next[idx], next[idx + 1]] = [next[idx + 1], next[idx]]; return next
+                    }) : undefined}
+                  />
+                ))}
+                {blocks.length === 0 && (
+                  <p style={{ color: '#a0aec0', fontSize: 13, margin: '4px 0 12px', fontStyle: 'italic' }}>
+                    Sin contenido — agrega un bloque para comenzar.
+                  </p>
+                )}
+              </div>
+
+              <div style={{ display: 'flex', gap: 6 }}>
+                {([
+                  { type: 'paragraph' as const, label: '＋ Texto' },
+                  { type: 'bold' as const, label: '＋ Negrita' },
+                  { type: 'divider' as const, label: '＋ Línea' },
+                ]).map(({ type, label }) => (
+                  <button key={type} type="button" onClick={() => addBlock(type)} style={{
+                    padding: '5px 12px', borderRadius: 6, fontSize: 12, fontWeight: 500,
+                    cursor: 'pointer', background: '#f8fafc', color: '#475569',
+                    border: '1px solid #e2e8f0',
+                  }}>
+                    {label}
+                  </button>
+                ))}
+              </div>
+            </div>
 
             {error && (
               <div style={{
@@ -282,6 +341,97 @@ export function RecordEditor({ record, fields, tags, userRole, onSave, onClose }
           </div>
         </form>
       </div>
+    </>
+  )
+}
+
+// ── Block row component ──────────────────────────────────────────────────────
+
+function BlockRow({
+  block, onUpdate, onDelete, onMoveUp, onMoveDown,
+}: {
+  block: Block
+  onUpdate: (content: string) => void
+  onDelete: () => void
+  onMoveUp?: () => void
+  onMoveDown?: () => void
+}) {
+  const [hovered, setHovered] = useState(false)
+
+  if (block.type === 'divider') {
+    return (
+      <div
+        onMouseEnter={() => setHovered(true)}
+        onMouseLeave={() => setHovered(false)}
+        style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 0' }}
+      >
+        <hr style={{ flex: 1, border: 'none', borderTop: '2px solid #e2e8f0', margin: 0 }} />
+        {hovered && (
+          <button type="button" onClick={onDelete} style={{
+            background: 'none', border: 'none', cursor: 'pointer',
+            color: '#cbd5e1', fontSize: 15, lineHeight: 1, padding: '0 2px', flexShrink: 0,
+          }}>×</button>
+        )}
+      </div>
+    )
+  }
+
+  const isBold = block.type === 'bold'
+
+  return (
+    <div
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
+      style={{ display: 'flex', alignItems: 'flex-start', gap: 4 }}
+    >
+      {/* Move handles */}
+      <div style={{
+        display: 'flex', flexDirection: 'column', gap: 1,
+        opacity: hovered ? 1 : 0, transition: 'opacity 0.1s',
+        paddingTop: 4,
+      }}>
+        <button type="button" onClick={onMoveUp} disabled={!onMoveUp} style={{
+          background: 'none', border: 'none', cursor: onMoveUp ? 'pointer' : 'default',
+          color: onMoveUp ? '#94a3b8' : '#e2e8f0', fontSize: 10, lineHeight: 1, padding: '1px 3px',
+        }}>▲</button>
+        <button type="button" onClick={onMoveDown} disabled={!onMoveDown} style={{
+          background: 'none', border: 'none', cursor: onMoveDown ? 'pointer' : 'default',
+          color: onMoveDown ? '#94a3b8' : '#e2e8f0', fontSize: 10, lineHeight: 1, padding: '1px 3px',
+        }}>▼</button>
+      </div>
+
+      <textarea
+        value={block.content ?? ''}
+        onChange={(e) => {
+          onUpdate(e.target.value)
+          e.target.style.height = 'auto'
+          e.target.style.height = e.target.scrollHeight + 'px'
+        }}
+        placeholder={isBold ? 'Título en negrita…' : 'Escribe algo…'}
+        rows={1}
+        style={{
+          flex: 1, resize: 'none', overflow: 'hidden',
+          padding: '6px 10px',
+          border: `1px solid ${hovered ? '#e2e8f0' : 'transparent'}`,
+          borderRadius: 6,
+          fontSize: isBold ? 15 : 14,
+          fontWeight: isBold ? 700 : 400,
+          color: '#0f172a', fontFamily: 'inherit',
+          background: hovered ? '#f8fafc' : 'transparent',
+          outline: 'none', lineHeight: 1.55,
+          transition: 'border-color 0.12s, background 0.12s',
+        }}
+        onFocus={(e) => { e.target.style.background = '#fff'; e.target.style.borderColor = '#00C4A0' }}
+        onBlur={(e) => { e.target.style.background = hovered ? '#f8fafc' : 'transparent'; e.target.style.borderColor = hovered ? '#e2e8f0' : 'transparent' }}
+      />
+
+      {/* Delete */}
+      <button type="button" onClick={onDelete} style={{
+        background: 'none', border: 'none', cursor: 'pointer',
+        color: '#cbd5e1', fontSize: 16, lineHeight: 1,
+        padding: '6px 4px', flexShrink: 0,
+        opacity: hovered ? 1 : 0, transition: 'opacity 0.1s',
+      }}>×</button>
     </div>
   )
 }
