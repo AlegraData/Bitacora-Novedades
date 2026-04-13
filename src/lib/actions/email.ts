@@ -150,7 +150,7 @@ export async function triggerButtonEmail(
   await addAuditLog({
     userId: user.id,
     userEmail: user.email,
-    userName: user.name,
+    userName: user.name ?? user.email,
     action: 'EMAIL_SENT',
     recordId,
     details: { buttonFieldId, emails },
