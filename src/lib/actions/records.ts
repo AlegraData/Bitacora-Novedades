@@ -82,23 +82,25 @@ export async function saveRecord(data: {
   const user = await requireManager()
   const isNew = !data.id
 
+  const jsonData = data.recordData as unknown as Prisma.InputJsonValue
+
   const record = isNew
     ? await prisma.record.create({
         data: {
-          data: data.recordData,
+          data: jsonData,
           createdByEmail: user.email,
-          createdByName: user.name,
+          createdByName: user.name ?? user.email,
         },
       })
     : await prisma.record.update({
         where: { id: data.id },
-        data: { data: data.recordData },
+        data: { data: jsonData },
       })
 
   await addAuditLog({
     userId: user.id,
     userEmail: user.email,
-    userName: user.name,
+    userName: user.name ?? user.email,
     action: isNew ? 'CREATED_RECORD' : 'UPDATED_RECORD',
     recordId: record.id,
   })
@@ -120,7 +122,7 @@ export async function deleteRecord(recordId: string): Promise<void> {
   await addAuditLog({
     userId: user.id,
     userEmail: user.email,
-    userName: user.name,
+    userName: user.name ?? user.email,
     action: 'DELETED_RECORD',
     recordId,
   })
