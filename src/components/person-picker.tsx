@@ -60,7 +60,7 @@ export function PersonPicker({ value, onChange, disabled, max }: PersonPickerPro
   const [activeIdx, setActiveIdx] = useState(0)
   const [apiError, setApiError] = useState<string | null>(null)
   const inputRef = useRef<HTMLInputElement>(null)
-  const timerRef = useRef<ReturnType<typeof setTimeout>>()
+  const timerRef = useRef<ReturnType<typeof setTimeout>>(undefined)
 
   const isSingle = max === 1
   const canAddMore = !max || value.length < max
