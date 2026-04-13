@@ -99,3 +99,19 @@ export interface FilterState {
   dateTo: string
   dateFieldId: string
 }
+
+export interface SortConfig {
+  fieldId: string
+  direction: 'asc' | 'desc'
+}
+
+export interface View {
+  id: string
+  name: string
+  emoji: string
+  filters: FilterState
+  sort: SortConfig | null
+  order: number
+  createdAt: string
+  updatedAt: string
+}

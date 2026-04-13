@@ -4,6 +4,7 @@ import { getCurrentUserProfile } from '@/lib/actions/users'
 import { getFields } from '@/lib/actions/fields'
 import { getTags } from '@/lib/actions/tags'
 import { getRecords } from '@/lib/actions/records'
+import { getViews } from '@/lib/actions/views'
 import { Navbar } from '@/components/navbar'
 import { RecordsTable } from '@/components/records-table'
 
@@ -17,11 +18,12 @@ export default async function AppPage() {
 
   if (!user) redirect('/auth/login')
 
-  const [userProfile, fields, tags, records] = await Promise.all([
+  const [userProfile, fields, tags, records, views] = await Promise.all([
     getCurrentUserProfile(),
     getFields(),
     getTags(),
     getRecords(),
+    getViews(),
   ])
 
   if (!userProfile) redirect('/auth/login')
@@ -45,6 +47,7 @@ export default async function AppPage() {
           userRole={userProfile.role}
           userEmail={userProfile.email}
           userName={safeName}
+          views={views}
         />
       </div>
     </div>

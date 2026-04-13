@@ -88,3 +88,14 @@ model AuditLog {
   recordId  String?
   details   Json?
 }
+
+model View {
+  id        String   @id @default(cuid())
+  name      String
+  emoji     String   @default("📋")
+  filters   Json     @default("{}")
+  sort      Json?
+  order     Int      @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}

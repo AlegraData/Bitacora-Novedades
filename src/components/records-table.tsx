@@ -1,15 +1,17 @@
 'use client'
 
 import { useState, useTransition, useCallback, useEffect, useMemo, useRef } from 'react'
-import type { Field, BitacoraRecord, Tag, FilterState, Role } from '@/types'
+import type { Field, BitacoraRecord, Tag, FilterState, Role, View, SortConfig } from '@/types'
 import { saveRecord, deleteRecord } from '@/lib/actions/records'
 import { saveField, deleteField, reorderFields } from '@/lib/actions/fields'
 import { saveTag, deleteTag } from '@/lib/actions/tags'
 import { triggerButtonEmail } from '@/lib/actions/email'
+import { saveView, deleteView } from '@/lib/actions/views'
 import { RecordEditor } from './record-editor'
 import { RecordDetail } from './record-detail'
 import { FieldEditor } from './field-editor'
 import { Chatbot } from './chatbot'
+import { ViewTabs } from './view-tabs'
 
 const FIELD_TYPE_ICONS: Record<string, string> = {
   text: 'T',
@@ -293,6 +295,8 @@ function PaginationBar({
   )
 }
 
+const GENERAL_VIEW_ID = '__general__'
+
 interface RecordsTableProps {
   fields: Field[]
   records: BitacoraRecord[]
@@ -300,6 +304,7 @@ interface RecordsTableProps {
   userRole: Role
   userEmail: string
   userName: string
+  views: View[]
 }
 
 export function RecordsTable({
@@ -309,10 +314,15 @@ export function RecordsTable({
   userRole,
   userEmail,
   userName,
+  views: initialViews,
 }: RecordsTableProps) {
   const [fields_, setFields] = useState<Field[]>(fields)
   const [records, setRecords] = useState<BitacoraRecord[]>(initialRecords)
   const [tags, setTags] = useState<Tag[]>(initialTags)
+  const [views, setViews] = useState<View[]>(initialViews)
+  const [activeViewId, setActiveViewId] = useState<string>(GENERAL_VIEW_ID)
+  const [showViewPanel, setShowViewPanel] = useState(false)
+  const isApplyingViewRef = useRef(false)
   const [isPending, startTransition] = useTransition()
 
   // Modals / panels
@@ -339,9 +349,10 @@ export function RecordsTable({
   const [search, setSearch] = useState('')
   const [filterFieldId, setFilterFieldId] = useState('')
   const [filterValue, setFilterValue] = useState('')
-  const [sortConfig, setSortConfig] = useState<{ fieldId: string, direction: 'asc' | 'desc' } | null>(null)
+  const [sortConfig, setSortConfig] = useState<SortConfig | null>(null)
   const [showSortMenu, setShowSortMenu] = useState(false)
   const sortMenuRef = useRef<HTMLDivElement>(null)
+  const autoSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
@@ -352,6 +363,72 @@ export function RecordsTable({
     document.addEventListener('mousedown', handleClickOutside)
     return () => document.removeEventListener('mousedown', handleClickOutside)
   }, [])
+
+  // Auto-save view filters when they change (skip General view and view-switching)
+  useEffect(() => {
+    if (activeViewId === GENERAL_VIEW_ID) return
+    if (isApplyingViewRef.current) { isApplyingViewRef.current = false; return }
+    if (autoSaveTimerRef.current) clearTimeout(autoSaveTimerRef.current)
+    autoSaveTimerRef.current = setTimeout(() => {
+      const currentView = views.find(v => v.id === activeViewId)
+      if (!currentView) return
+      const filters: FilterState = { search, fieldId: filterFieldId, value: filterValue, dateFrom: '', dateTo: '', dateFieldId: '' }
+      startTransition(async () => {
+        const saved = await saveView({ id: activeViewId, name: currentView.name, emoji: currentView.emoji, filters, sort: sortConfig, order: currentView.order })
+        setViews(prev => prev.map(v => v.id === saved.id ? saved : v))
+      })
+    }, 1000)
+    return () => { if (autoSaveTimerRef.current) clearTimeout(autoSaveTimerRef.current) }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [search, filterFieldId, filterValue, sortConfig, activeViewId])
+
+  const handleSwitchView = useCallback((viewId: string) => {
+    isApplyingViewRef.current = true
+    setActiveViewId(viewId)
+    if (viewId === GENERAL_VIEW_ID) {
+      setSearch(''); setFilterFieldId(''); setFilterValue(''); setSortConfig(null)
+      setShowViewPanel(false)
+      return
+    }
+    const view = views.find(v => v.id === viewId)
+    if (!view) return
+    setSearch(view.filters.search ?? '')
+    setFilterFieldId(view.filters.fieldId ?? '')
+    setFilterValue(view.filters.value ?? '')
+    setSortConfig(view.sort)
+    setShowViewPanel(true)
+  }, [views])
+
+  const handleCreateView = useCallback((name: string, emoji: string) => {
+    const filters: FilterState = { search, fieldId: filterFieldId, value: filterValue, dateFrom: '', dateTo: '', dateFieldId: '' }
+    startTransition(async () => {
+      const created = await saveView({ name, emoji, filters, sort: sortConfig, order: views.length })
+      setViews(prev => [...prev, created])
+      setActiveViewId(created.id)
+      setShowViewPanel(true)
+    })
+  }, [search, filterFieldId, filterValue, sortConfig, views.length])
+
+  const handleUpdateView = useCallback((id: string, name: string, emoji: string) => {
+    const currentView = views.find(v => v.id === id)
+    if (!currentView) return
+    startTransition(async () => {
+      const saved = await saveView({ id, name, emoji, filters: currentView.filters, sort: currentView.sort, order: currentView.order })
+      setViews(prev => prev.map(v => v.id === saved.id ? saved : v))
+    })
+  }, [views])
+
+  const handleDeleteView = useCallback((id: string) => {
+    startTransition(async () => {
+      await deleteView(id)
+      setViews(prev => prev.filter(v => v.id !== id))
+      if (activeViewId === id) {
+        isApplyingViewRef.current = true
+        setActiveViewId(GENERAL_VIEW_ID)
+        setSearch(''); setFilterFieldId(''); setFilterValue(''); setSortConfig(null)
+      }
+    })
+  }, [activeViewId])
 
   const toggleSort = (fieldId: string) => {
     if (sortConfig?.fieldId === fieldId) {
@@ -533,7 +610,90 @@ export function RecordsTable({
     : []
 
   return (
-    <>
+    <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0, overflow: 'hidden' }}>
+      {/* View tabs */}
+      <ViewTabs
+        views={views}
+        activeViewId={activeViewId}
+        onSwitch={handleSwitchView}
+        onCreate={handleCreateView}
+        onUpdate={handleUpdateView}
+        onDelete={handleDeleteView}
+      />
+
+      {/* View filter panel — solo para vistas guardadas */}
+      {activeViewId !== GENERAL_VIEW_ID && showViewPanel && (
+        <div style={{
+          background: '#fff',
+          borderBottom: '1px solid #e2e8f0',
+          padding: '10px 20px',
+          display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap',
+          flexShrink: 0,
+          boxShadow: '0 2px 8px rgba(0,0,0,0.06)',
+        }}>
+          <span style={{ fontSize: 12, fontWeight: 600, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Filtros</span>
+
+          {/* Field filter */}
+          <select value={filterFieldId} onChange={(e) => { setFilterFieldId(e.target.value); setFilterValue('') }}
+            style={{ padding: '6px 10px', border: '1px solid #e2e8f0', borderRadius: 7, fontSize: 13, outline: 'none', background: '#fff' }}>
+            <option value="">Campo...</option>
+            {fields_.filter(f => f.isFilterable && ['select','multiselect','text'].includes(f.type)).map(f => (
+              <option key={f.id} value={f.id}>{f.name}</option>
+            ))}
+          </select>
+
+          {filterFieldId && (
+            fields_.find(f => f.id === filterFieldId)?.type === 'select' || fields_.find(f => f.id === filterFieldId)?.type === 'multiselect'
+              ? <select value={filterValue} onChange={(e) => setFilterValue(e.target.value)}
+                  style={{ padding: '6px 10px', border: '1px solid #e2e8f0', borderRadius: 7, fontSize: 13, outline: 'none', background: '#fff' }}>
+                  <option value="">Todos</option>
+                  {tags.filter(t => t.fieldId === filterFieldId).map(t => <option key={t.id} value={t.name}>{t.name}</option>)}
+                </select>
+              : <input type="text" placeholder="Valor..." value={filterValue} onChange={(e) => setFilterValue(e.target.value)}
+                  style={{ padding: '6px 10px', border: '1px solid #e2e8f0', borderRadius: 7, fontSize: 13, outline: 'none', width: 130 }} />
+          )}
+
+          <span style={{ fontSize: 12, fontWeight: 600, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.05em', marginLeft: 8 }}>Ordenar</span>
+
+          <select value={sortConfig?.fieldId ?? ''} onChange={(e) => setSortConfig(e.target.value ? { fieldId: e.target.value, direction: sortConfig?.direction ?? 'asc' } : null)}
+            style={{ padding: '6px 10px', border: '1px solid #e2e8f0', borderRadius: 7, fontSize: 13, outline: 'none', background: '#fff' }}>
+            <option value="">Sin orden</option>
+            {visibleFields.map(f => <option key={f.id} value={f.id}>{f.name}</option>)}
+          </select>
+
+          {sortConfig && (
+            <select value={sortConfig.direction} onChange={(e) => setSortConfig({ ...sortConfig, direction: e.target.value as 'asc' | 'desc' })}
+              style={{ padding: '6px 10px', border: '1px solid #e2e8f0', borderRadius: 7, fontSize: 13, outline: 'none', background: '#fff', width: 120 }}>
+              <option value="asc">Ascendente</option>
+              <option value="desc">Descendente</option>
+            </select>
+          )}
+
+          <div style={{ flex: 1 }} />
+
+          <button onClick={() => {
+            const currentView = views.find(v => v.id === activeViewId)
+            if (!currentView) return
+            const filters: FilterState = { search, fieldId: filterFieldId, value: filterValue, dateFrom: '', dateTo: '', dateFieldId: '' }
+            startTransition(async () => {
+              const saved = await saveView({ id: activeViewId, name: currentView.name, emoji: currentView.emoji, filters, sort: sortConfig, order: currentView.order })
+              setViews(prev => prev.map(v => v.id === saved.id ? saved : v))
+            })
+            setShowViewPanel(false)
+          }} style={{
+            padding: '6px 16px', background: '#00C4A0', color: '#fff',
+            border: 'none', borderRadius: 7, cursor: 'pointer', fontSize: 13, fontWeight: 600,
+          }}>Guardar</button>
+
+          <button onClick={() => setShowViewPanel(false)} style={{
+            padding: '6px 10px', background: 'none', color: '#94a3b8',
+            border: '1px solid #e2e8f0', borderRadius: 7, cursor: 'pointer', fontSize: 13,
+          }}>×</button>
+        </div>
+      )}
+
+      {/* Inner content: toolbar + table (position relative para el panel lateral) */}
+      <div style={{ position: 'relative', flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0, overflow: 'hidden' }}>
       {/* Toolbar */}
       <div style={{
         background: '#fff',
@@ -546,34 +706,12 @@ export function RecordsTable({
         flexShrink: 0,
       }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, flex: 1, minWidth: 0 }}>
-          {/* Search */}
-          <input
-            type="text"
-            placeholder="Buscar en registros..."
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            style={{
-              padding: '7px 12px',
-              border: '1px solid #e2e8f0',
-              borderRadius: 8,
-              fontSize: 13,
-              width: 220,
-              outline: 'none',
-            }}
-          />
-
-          {/* Field filter */}
+          {/* Field filter + Sort — solo en vista General */}
+          {activeViewId === GENERAL_VIEW_ID && (<>
           <select
             value={filterFieldId}
             onChange={(e) => { setFilterFieldId(e.target.value); setFilterValue('') }}
-            style={{
-              padding: '7px 10px',
-              border: '1px solid #e2e8f0',
-              borderRadius: 8,
-              fontSize: 13,
-              outline: 'none',
-              background: '#fff',
-            }}
+            style={{ padding: '7px 10px', border: '1px solid #e2e8f0', borderRadius: 8, fontSize: 13, outline: 'none', background: '#fff' }}
           >
             <option value="">Filtrar por campo...</option>
             {fields_.filter((f) => f.isFilterable && (f.type === 'select' || f.type === 'multiselect' || f.type === 'text')).map((f) => (
@@ -584,24 +722,16 @@ export function RecordsTable({
           {filterFieldId && (
             fields_.find(f => f.id === filterFieldId)?.type === 'select' || fields_.find(f => f.id === filterFieldId)?.type === 'multiselect'
               ? (
-                <select
-                  value={filterValue}
-                  onChange={(e) => setFilterValue(e.target.value)}
-                  style={{ padding: '7px 10px', border: '1px solid #e2e8f0', borderRadius: 8, fontSize: 13, outline: 'none', background: '#fff' }}
-                >
+                <select value={filterValue} onChange={(e) => setFilterValue(e.target.value)}
+                  style={{ padding: '7px 10px', border: '1px solid #e2e8f0', borderRadius: 8, fontSize: 13, outline: 'none', background: '#fff' }}>
                   <option value="">Todos</option>
                   {tags.filter(t => t.fieldId === filterFieldId).map(t => (
                     <option key={t.id} value={t.name}>{t.name}</option>
                   ))}
                 </select>
               ) : (
-                <input
-                  type="text"
-                  placeholder="Valor..."
-                  value={filterValue}
-                  onChange={(e) => setFilterValue(e.target.value)}
-                  style={{ padding: '7px 10px', border: '1px solid #e2e8f0', borderRadius: 8, fontSize: 13, outline: 'none', width: 140 }}
-                />
+                <input type="text" placeholder="Valor..." value={filterValue} onChange={(e) => setFilterValue(e.target.value)}
+                  style={{ padding: '7px 10px', border: '1px solid #e2e8f0', borderRadius: 8, fontSize: 13, outline: 'none', width: 140 }} />
               )
           )}
 
@@ -613,10 +743,8 @@ export function RecordsTable({
               padding: '4px 10px', fontSize: 12, fontWeight: 500,
             }}>
               {f.label}
-              <span
-                style={{ cursor: 'pointer', fontSize: 14, opacity: 0.7 }}
-                onClick={() => { setFilterFieldId(''); setFilterValue('') }}
-              >×</span>
+              <span style={{ cursor: 'pointer', fontSize: 14, opacity: 0.7 }}
+                onClick={() => { setFilterFieldId(''); setFilterValue('') }}>×</span>
             </span>
           ))}
 
@@ -700,44 +828,34 @@ export function RecordsTable({
               </div>
             )}
           </div>
+          </>)}
         </div>
 
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
           {selectedIds.size > 0 && (
-            <div style={{ display: 'flex', gap: 6, alignItems: 'center', padding: '0 10px', borderRight: '1px solid #e2e8f0', marginRight: 10 }}>
+            <div style={{ display: 'flex', gap: 6, alignItems: 'center', padding: '0 10px', borderRight: '1px solid #e2e8f0', marginRight: 4 }}>
               <span style={{ fontSize: 12, color: '#64748b', fontWeight: 600 }}>{selectedIds.size} seleccionados</span>
-              <button
-                onClick={() => setSelectedIds(new Set())}
-                style={{ background: 'none', border: 'none', color: '#ef4444', fontSize: 12, cursor: 'pointer', fontWeight: 500 }}
-              >Limpiar</button>
+              <button onClick={() => setSelectedIds(new Set())}
+                style={{ background: 'none', border: 'none', color: '#ef4444', fontSize: 12, cursor: 'pointer', fontWeight: 500 }}>Limpiar</button>
             </div>
           )}
 
-          <button
-            onClick={() => setShowChatbot(true)}
-            style={{
-              display: 'inline-flex', alignItems: 'center', gap: 6,
-              padding: '7px 14px', borderRadius: 8, fontSize: 13,
-              fontWeight: 500, cursor: 'pointer',
-              background: '#fff', color: '#4a5568',
-              border: '1px solid #e2e8f0',
-            }}
-          >
-            💬 Chatbot
-          </button>
+          {/* Search — siempre a la derecha */}
+          <input type="text" placeholder="Buscar..." value={search} onChange={(e) => setSearch(e.target.value)}
+            style={{ padding: '7px 12px', border: '1px solid #e2e8f0', borderRadius: 8, fontSize: 13, width: 200, outline: 'none' }} />
+
+          <button onClick={() => setShowChatbot(true)} style={{
+            display: 'inline-flex', alignItems: 'center', gap: 6,
+            padding: '7px 14px', borderRadius: 8, fontSize: 13,
+            fontWeight: 500, cursor: 'pointer', background: '#fff', color: '#4a5568', border: '1px solid #e2e8f0',
+          }}>💬 Chatbot</button>
 
           {canEdit && (
-            <button
-              onClick={() => setEditingRecord('new')}
-              style={{
-                display: 'inline-flex', alignItems: 'center', gap: 6,
-                padding: '7px 14px', borderRadius: 8, fontSize: 13,
-                fontWeight: 500, cursor: 'pointer',
-                background: '#00C4A0', color: '#fff', border: 'none',
-              }}
-            >
-              + Nuevo registro
-            </button>
+            <button onClick={() => setEditingRecord('new')} style={{
+              display: 'inline-flex', alignItems: 'center', gap: 6,
+              padding: '7px 14px', borderRadius: 8, fontSize: 13,
+              fontWeight: 500, cursor: 'pointer', background: '#00C4A0', color: '#fff', border: 'none',
+            }}>+ Nuevo registro</button>
           )}
         </div>
       </div>
@@ -933,18 +1051,7 @@ export function RecordsTable({
         </div>
       </div>
 
-      {/* Pagination */}
-      <PaginationBar
-        currentPage={clampedPage}
-        totalPages={totalPages}
-        pageSize={pageSize}
-        filteredCount={filteredRecords.length}
-        totalCount={records.length}
-        onPageChange={setCurrentPage}
-        onPageSizeChange={(s) => { setPageSize(s); setCurrentPage(1) }}
-      />
-
-      {/* Panels / Modals */}
+      {/* Panel lateral — dentro del área toolbar+tabla, no tapa paginación */}
       {detailRecord !== null && (
         <RecordDetail
           record={detailRecord}
@@ -958,6 +1065,18 @@ export function RecordsTable({
           onClose={() => setDetailRecord(null)}
         />
       )}
+      </div>{/* fin inner content */}
+
+      {/* Pagination */}
+      <PaginationBar
+        currentPage={clampedPage}
+        totalPages={totalPages}
+        pageSize={pageSize}
+        filteredCount={filteredRecords.length}
+        totalCount={records.length}
+        onPageChange={setCurrentPage}
+        onPageSizeChange={(s) => { setPageSize(s); setCurrentPage(1) }}
+      />
 
       {editingRecord !== null && (
         <RecordEditor
@@ -992,7 +1111,7 @@ export function RecordsTable({
       )}
 
       {showChatbot && <Chatbot onClose={() => setShowChatbot(false)} />}
-    </>
+    </div>
   )
 }
 

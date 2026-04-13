@@ -27,7 +27,10 @@ export async function updateRecordEmbedding(recordId: string, recordData: Record
 
   try {
     const content = await recordToText(recordData)
-    const result = await embeddingModel.embedContent(content)
+    const result = await embeddingModel.embedContent({
+      content: { role: 'user', parts: [{ text: content }] },
+      outputDimensionality: 768,
+    } as Parameters<typeof embeddingModel.embedContent>[0])
     const vector = result.embedding.values
 
     const vectorString = `[${vector.join(',')}]`
@@ -51,7 +54,10 @@ export async function searchSimilarRecords(query: string, limit = 5) {
   if (!process.env.GEMINI_API_KEY || !query) return []
 
   try {
-    const result = await embeddingModel.embedContent(query)
+    const result = await embeddingModel.embedContent({
+      content: { role: 'user', parts: [{ text: query }] },
+      outputDimensionality: 768,
+    } as Parameters<typeof embeddingModel.embedContent>[0])
     const vector = result.embedding.values
     const vectorString = `[${vector.join(',')}]`
 

@@ -25,6 +25,8 @@ export function RecordDetail({ record, fields, tags, userRole, onSave, onClose }
   const [status, setStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle')
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const isFirstRender = useRef(true)
+  const [dragBlockIdx, setDragBlockIdx] = useState<number | null>(null)
+  const [dragOverBlockIdx, setDragOverBlockIdx] = useState<number | null>(null)
 
   const visibleFields = fields.filter((f) => f.isVisible && f.type !== 'button')
 
@@ -163,14 +165,14 @@ export function RecordDetail({ record, fields, tags, userRole, onSave, onClose }
     <>
       {/* Backdrop */}
       <div onClick={onClose} style={{
-        position: 'fixed', inset: 0, zIndex: 300,
-        background: 'rgba(15,23,42,0.25)',
+        position: 'absolute', inset: 0, zIndex: 300,
+        background: 'rgba(15,23,42,0.18)',
       }} />
 
       {/* Sliding panel */}
       <div style={{
-        position: 'fixed', top: 0, right: 0, bottom: 0, zIndex: 301,
-        width: 'min(720px, 62vw)',
+        position: 'absolute', top: 0, right: 0, bottom: 0, zIndex: 301,
+        width: 'min(720px, 62%)',
         background: '#fff',
         boxShadow: '-6px 0 40px rgba(15,23,42,0.14)',
         display: 'flex', flexDirection: 'column',
@@ -277,12 +279,20 @@ export function RecordDetail({ record, fields, tags, userRole, onSave, onClose }
                     setBlocks((prev) => prev.map((b) => b.id === block.id ? { ...b, content } : b))
                   }
                   onDelete={() => setBlocks((prev) => prev.filter((b) => b.id !== block.id))}
-                  onMoveUp={idx > 0 ? () => setBlocks((prev) => {
-                    const next = [...prev]; [next[idx - 1], next[idx]] = [next[idx], next[idx - 1]]; return next
-                  }) : undefined}
-                  onMoveDown={idx < blocks.length - 1 ? () => setBlocks((prev) => {
-                    const next = [...prev]; [next[idx], next[idx + 1]] = [next[idx + 1], next[idx]]; return next
-                  }) : undefined}
+                  onDragStart={() => setDragBlockIdx(idx)}
+                  onDragOver={(e) => { e.preventDefault(); setDragOverBlockIdx(idx) }}
+                  onDrop={() => {
+                    if (dragBlockIdx === null || dragBlockIdx === idx) return
+                    setBlocks((prev) => {
+                      const next = [...prev]
+                      const [moved] = next.splice(dragBlockIdx, 1)
+                      next.splice(idx, 0, moved)
+                      return next
+                    })
+                    setDragBlockIdx(null)
+                    setDragOverBlockIdx(null)
+                  }}
+                  isDragOver={dragOverBlockIdx === idx}
                 />
               ))}
               {blocks.length === 0 && (
@@ -317,30 +327,52 @@ export function RecordDetail({ record, fields, tags, userRole, onSave, onClose }
 // ── Block row component ──────────────────────────────────────────────────────
 
 function BlockRow({
-  block, onUpdate, onDelete, onMoveUp, onMoveDown,
+  block, onUpdate, onDelete, onDragStart, onDragOver, onDrop, isDragOver,
 }: {
   block: Block
   onUpdate: (content: string) => void
   onDelete: () => void
-  onMoveUp?: () => void
-  onMoveDown?: () => void
+  onDragStart: () => void
+  onDragOver: (e: React.DragEvent) => void
+  onDrop: () => void
+  isDragOver: boolean
 }) {
-  const [hovered, setHovered] = useState(false)
+  const rowStyle: React.CSSProperties = {
+    display: 'flex', alignItems: 'flex-start', gap: 6, padding: '2px 0',
+    borderTop: isDragOver ? '2px solid #00C4A0' : '2px solid transparent',
+    transition: 'border-color 0.1s',
+  }
+
+  const handle = (
+    <span
+      draggable
+      onDragStart={(e) => { e.stopPropagation(); onDragStart() }}
+      title="Arrastrar para mover"
+      style={{
+        cursor: 'grab', color: '#cbd5e0', fontSize: 16, lineHeight: 1,
+        paddingTop: 6, flexShrink: 0, userSelect: 'none',
+      }}
+    >⠿</span>
+  )
+
+  const deleteBtn = (
+    <button type="button" onClick={onDelete} title="Eliminar bloque" style={{
+      background: 'none', border: '1px solid #e2e8f0', borderRadius: 4,
+      cursor: 'pointer', color: '#94a3b8', fontSize: 14, lineHeight: 1,
+      padding: '4px 7px', flexShrink: 0, marginTop: 4,
+    }}>×</button>
+  )
 
   if (block.type === 'divider') {
     return (
       <div
-        onMouseEnter={() => setHovered(true)}
-        onMouseLeave={() => setHovered(false)}
-        style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 0' }}
+        style={{ ...rowStyle, alignItems: 'center' }}
+        onDragOver={onDragOver}
+        onDrop={onDrop}
       >
-        <hr style={{ flex: 1, border: 'none', borderTop: '2px solid #e2e8f0', margin: 0 }} />
-        {hovered && (
-          <button type="button" onClick={onDelete} style={{
-            background: 'none', border: 'none', cursor: 'pointer',
-            color: '#cbd5e1', fontSize: 15, lineHeight: 1, padding: '0 2px', flexShrink: 0,
-          }}>×</button>
-        )}
+        {handle}
+        <hr style={{ flex: 1, border: 'none', borderTop: '2px solid #e2e8f0', margin: '0 4px' }} />
+        {deleteBtn}
       </div>
     )
   }
@@ -348,27 +380,8 @@ function BlockRow({
   const isBold = block.type === 'bold'
 
   return (
-    <div
-      onMouseEnter={() => setHovered(true)}
-      onMouseLeave={() => setHovered(false)}
-      style={{ display: 'flex', alignItems: 'flex-start', gap: 4 }}
-    >
-      {/* Move handles */}
-      <div style={{
-        display: 'flex', flexDirection: 'column', gap: 1,
-        opacity: hovered ? 1 : 0, transition: 'opacity 0.1s',
-        paddingTop: 4,
-      }}>
-        <button type="button" onClick={onMoveUp} disabled={!onMoveUp} style={{
-          background: 'none', border: 'none', cursor: onMoveUp ? 'pointer' : 'default',
-          color: onMoveUp ? '#94a3b8' : '#e2e8f0', fontSize: 10, lineHeight: 1, padding: '1px 3px',
-        }}>▲</button>
-        <button type="button" onClick={onMoveDown} disabled={!onMoveDown} style={{
-          background: 'none', border: 'none', cursor: onMoveDown ? 'pointer' : 'default',
-          color: onMoveDown ? '#94a3b8' : '#e2e8f0', fontSize: 10, lineHeight: 1, padding: '1px 3px',
-        }}>▼</button>
-      </div>
-
+    <div style={rowStyle} onDragOver={onDragOver} onDrop={onDrop}>
+      {handle}
       <textarea
         value={block.content ?? ''}
         onChange={(e) => {
@@ -381,26 +394,18 @@ function BlockRow({
         style={{
           flex: 1, resize: 'none', overflow: 'hidden',
           padding: '6px 10px',
-          border: `1px solid ${hovered ? '#e2e8f0' : 'transparent'}`,
+          border: '1px solid #e2e8f0',
           borderRadius: 6,
           fontSize: isBold ? 15 : 14,
           fontWeight: isBold ? 700 : 400,
           color: '#0f172a', fontFamily: 'inherit',
-          background: hovered ? '#f8fafc' : 'transparent',
+          background: '#fafafa',
           outline: 'none', lineHeight: 1.55,
-          transition: 'border-color 0.12s, background 0.12s',
         }}
         onFocus={(e) => { e.target.style.background = '#fff'; e.target.style.borderColor = '#00C4A0' }}
-        onBlur={(e) => { e.target.style.background = hovered ? '#f8fafc' : 'transparent'; e.target.style.borderColor = hovered ? '#e2e8f0' : 'transparent' }}
+        onBlur={(e) => { e.target.style.background = '#fafafa'; e.target.style.borderColor = '#e2e8f0' }}
       />
-
-      {/* Delete */}
-      <button type="button" onClick={onDelete} style={{
-        background: 'none', border: 'none', cursor: 'pointer',
-        color: '#cbd5e1', fontSize: 16, lineHeight: 1,
-        padding: '6px 4px', flexShrink: 0,
-        opacity: hovered ? 1 : 0, transition: 'opacity 0.1s',
-      }}>×</button>
+      {deleteBtn}
     </div>
   )
 }
