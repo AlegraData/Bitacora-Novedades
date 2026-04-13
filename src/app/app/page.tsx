@@ -26,10 +26,12 @@ export default async function AppPage() {
 
   if (!userProfile) redirect('/auth/login')
 
+  const safeName = userProfile.name ?? userProfile.email.split('@')[0]
+
   return (
     <div style={{ height: '100vh', display: 'flex', flexDirection: 'column', background: '#f0f4f8', overflow: 'hidden' }}>
       <Navbar
-        userName={userProfile.name}
+        userName={safeName}
         userEmail={userProfile.email}
         userImage={userProfile.image}
         userRole={userProfile.role}
@@ -42,7 +44,7 @@ export default async function AppPage() {
           allTags={tags}
           userRole={userProfile.role}
           userEmail={userProfile.email}
-          userName={userProfile.name}
+          userName={safeName}
         />
       </div>
     </div>

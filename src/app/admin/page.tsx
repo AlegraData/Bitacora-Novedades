@@ -28,7 +28,7 @@ export default async function AdminPage() {
   return (
     <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column', background: '#f0f4f8' }}>
       <Navbar
-        userName={userProfile.name}
+        userName={userProfile.name ?? userProfile.email.split('@')[0]}
         userEmail={userProfile.email}
         userImage={userProfile.image}
         userRole={userProfile.role}
