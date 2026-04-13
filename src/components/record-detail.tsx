@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import type { Field, BitacoraRecord, Tag, Role, RecordData, Block } from '@/types'
 import { PersonPicker } from './person-picker'
 import { MultiSelectDropdown } from './multi-select-dropdown'
@@ -22,8 +22,9 @@ export function RecordDetail({ record, fields, tags, userRole, onSave, onClose }
     const raw = record.data['__blocks__']
     return Array.isArray(raw) ? (raw as Block[]) : []
   })
-  const [saving, setSaving] = useState(false)
-  const [error, setError] = useState('')
+  const [status, setStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle')
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const isFirstRender = useRef(true)
 
   const visibleFields = fields.filter((f) => f.isVisible && f.type !== 'button')
 
@@ -44,20 +45,29 @@ export function RecordDetail({ record, fields, tags, userRole, onSave, onClose }
     setFormData((prev) => ({ ...prev, [fieldId]: value as RecordData[string] }))
   }
 
-  async function handleSave() {
-    setSaving(true)
-    setError('')
-    try {
-      await onSave({
-        id: record.id,
-        recordData: { ...formData, __blocks__: blocks as RecordData[string] },
-      })
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Error al guardar')
-    } finally {
-      setSaving(false)
+  // Auto-save con debounce de 800ms
+  useEffect(() => {
+    if (isFirstRender.current) {
+      isFirstRender.current = false
+      return
     }
-  }
+    if (debounceRef.current) clearTimeout(debounceRef.current)
+    setStatus('saving')
+    debounceRef.current = setTimeout(async () => {
+      try {
+        await onSave({
+          id: record.id,
+          recordData: { ...formData, __blocks__: blocks as RecordData[string] },
+        })
+        setStatus('saved')
+        setTimeout(() => setStatus('idle'), 2000)
+      } catch {
+        setStatus('error')
+      }
+    }, 800)
+    return () => { if (debounceRef.current) clearTimeout(debounceRef.current) }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [formData, blocks])
 
   // ── Field rendering ───────────────────────────────────────────────────────
 
@@ -175,15 +185,16 @@ export function RecordDetail({ record, fields, tags, userRole, onSave, onClose }
           <span style={{ fontSize: 11, fontWeight: 600, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
             Detalle del registro
           </span>
-          <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-            {error && <span style={{ fontSize: 12, color: '#ef4444' }}>{error}</span>}
-            <button onClick={handleSave} disabled={saving} style={{
-              padding: '6px 18px', background: saving ? '#a0aec0' : '#00C4A0',
-              color: '#fff', border: 'none', borderRadius: 7,
-              cursor: saving ? 'default' : 'pointer', fontSize: 13, fontWeight: 600,
-            }}>
-              {saving ? 'Guardando…' : 'Guardar'}
-            </button>
+          <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
+            {status === 'saving' && (
+              <span style={{ fontSize: 12, color: '#94a3b8' }}>Guardando…</span>
+            )}
+            {status === 'saved' && (
+              <span style={{ fontSize: 12, color: '#00C4A0', fontWeight: 500 }}>✓ Guardado</span>
+            )}
+            {status === 'error' && (
+              <span style={{ fontSize: 12, color: '#ef4444' }}>Error al guardar</span>
+            )}
             <button onClick={onClose} style={{
               background: 'none', border: 'none', cursor: 'pointer',
               color: '#94a3b8', fontSize: 22, lineHeight: 1, padding: '2px 4px',

@@ -129,7 +129,7 @@ export function MultiSelectDropdown({ options, value, onChange, disabled }: Mult
             position: 'absolute',
             top: 'calc(100% + 4px)',
             left: 0,
-            right: 0,
+            minWidth: 280,
             zIndex: 1000,
             background: '#fff',
             border: '1px solid #e2e8f0',
@@ -173,16 +173,16 @@ export function MultiSelectDropdown({ options, value, onChange, disabled }: Mult
                     display: 'flex',
                     alignItems: 'center',
                     gap: 10,
-                    padding: '7px 12px',
+                    padding: '8px 12px',
                     cursor: 'pointer',
-                    background: isSelected ? '#f8fafc' : 'transparent',
+                    background: isSelected ? '#f1f5f9' : 'transparent',
                     transition: 'background 0.1s',
                   }}
                   onMouseEnter={(e) => {
-                    if (!isSelected) (e.currentTarget as HTMLDivElement).style.background = '#f8fafc'
+                    if (!isSelected) e.currentTarget.style.background = '#f8fafc'
                   }}
                   onMouseLeave={(e) => {
-                    if (!isSelected) (e.currentTarget as HTMLDivElement).style.background = 'transparent'
+                    if (!isSelected) e.currentTarget.style.background = 'transparent'
                   }}
                 >
                   {/* Checkbox */}

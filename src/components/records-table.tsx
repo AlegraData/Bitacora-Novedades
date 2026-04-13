@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useTransition, useCallback, useEffect } from 'react'
+import { useState, useTransition, useCallback, useEffect, useMemo, useRef } from 'react'
 import type { Field, BitacoraRecord, Tag, FilterState, Role } from '@/types'
 import { saveRecord, deleteRecord } from '@/lib/actions/records'
 import { saveField, deleteField, reorderFields } from '@/lib/actions/fields'
@@ -335,10 +335,35 @@ export function RecordsTable({
     window.dispatchEvent(new CustomEvent('bitacora-selection-change', { detail: ids }))
   }, [selectedIds])
 
-  // Filters
+  // Filters & Sorting
   const [search, setSearch] = useState('')
   const [filterFieldId, setFilterFieldId] = useState('')
   const [filterValue, setFilterValue] = useState('')
+  const [sortConfig, setSortConfig] = useState<{ fieldId: string, direction: 'asc' | 'desc' } | null>(null)
+  const [showSortMenu, setShowSortMenu] = useState(false)
+  const sortMenuRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (sortMenuRef.current && !sortMenuRef.current.contains(e.target as Node)) {
+        setShowSortMenu(false)
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [])
+
+  const toggleSort = (fieldId: string) => {
+    if (sortConfig?.fieldId === fieldId) {
+      if (sortConfig.direction === 'asc') {
+        setSortConfig({ fieldId, direction: 'desc' })
+      } else {
+        setSortConfig(null)
+      }
+    } else {
+      setSortConfig({ fieldId, direction: 'asc' })
+    }
+  }
 
   // Pagination
   const [currentPage, setCurrentPage] = useState(1)
@@ -355,17 +380,48 @@ export function RecordsTable({
   )?.id ?? visibleFields[0]?.id
 
   // Filter records
-  const filteredRecords = records.filter((r) => {
-    const matchSearch = !search || Object.values(r.data).some((v) =>
-      String(v ?? '').toLowerCase().includes(search.toLowerCase())
-    )
-    const matchFilter = !filterFieldId || !filterValue ||
-      String(r.data[filterFieldId] ?? '').toLowerCase().includes(filterValue.toLowerCase())
-    return matchSearch && matchFilter
-  })
+  const filteredRecords = useMemo(() => {
+    const result = records.filter((r) => {
+      const matchSearch = !search || Object.values(r.data).some((v) =>
+        String(v ?? '').toLowerCase().includes(search.toLowerCase())
+      )
+      const matchFilter = !filterFieldId || !filterValue ||
+        String(r.data[filterFieldId] ?? '').toLowerCase().includes(filterValue.toLowerCase())
+      return matchSearch && matchFilter
+    })
 
-  // Reset to page 1 when filters change
-  useEffect(() => { setCurrentPage(1) }, [search, filterFieldId, filterValue])
+    if (!sortConfig) return result
+
+    return [...result].sort((a, b) => {
+      let valA = a.data[sortConfig.fieldId]
+      let valB = b.data[sortConfig.fieldId]
+
+      // Extract raw values for arrays
+      if (Array.isArray(valA)) valA = valA.join(', ')
+      if (Array.isArray(valB)) valB = valB.join(', ')
+
+      if (valA === valB) return 0
+      if (valA == null || valA === '') return 1 // Nulls to the bottom
+      if (valB == null || valB === '') return -1
+
+      const strA = String(valA).toLowerCase()
+      const strB = String(valB).toLowerCase()
+
+      // Basic heuristic for numbers
+      const numA = Number(valA)
+      const numB = Number(valB)
+      if (!isNaN(numA) && !isNaN(numB)) {
+        return sortConfig.direction === 'asc' ? numA - numB : numB - numA
+      }
+
+      if (strA < strB) return sortConfig.direction === 'asc' ? -1 : 1
+      if (strA > strB) return sortConfig.direction === 'asc' ? 1 : -1
+      return 0
+    })
+  }, [records, search, filterFieldId, filterValue, sortConfig])
+
+  // Reset to page 1 when filters or sorts change
+  useEffect(() => { setCurrentPage(1) }, [search, filterFieldId, filterValue, sortConfig])
 
   const totalPages = Math.max(1, Math.ceil(filteredRecords.length / pageSize))
   const clampedPage = Math.min(currentPage, totalPages)
@@ -563,6 +619,87 @@ export function RecordsTable({
               >×</span>
             </span>
           ))}
+
+          {/* Sort Button */}
+          <div style={{ position: 'relative' }} ref={sortMenuRef}>
+            <button
+              onClick={() => setShowSortMenu(!showSortMenu)}
+              style={{
+                display: 'inline-flex', alignItems: 'center', gap: 6,
+                padding: '7px 12px', borderRadius: 8, fontSize: 13,
+                fontWeight: 500, cursor: 'pointer',
+                background: sortConfig ? '#e0f7f4' : '#fff',
+                color: sortConfig ? '#00A888' : '#4a5568',
+                border: `1px solid ${sortConfig ? '#00C4A0' : '#e2e8f0'}`,
+                transition: 'all 0.1s',
+              }}
+            >
+              <span style={{ fontSize: 14 }}>⇅</span>
+              {sortConfig ? 'Ordenado' : 'Ordenar'}
+            </button>
+
+            {/* Sort Popover Menu */}
+            {showSortMenu && (
+              <div style={{
+                position: 'absolute', top: '100%', left: 0, marginTop: 6,
+                background: '#fff', borderRadius: 8,
+                boxShadow: '0 4px 20px rgba(0,0,0,0.12), 0 0 0 1px rgba(0,0,0,0.05)',
+                width: 320, zIndex: 120, overflow: 'hidden',
+                display: 'flex', flexDirection: 'column',
+              }}>
+                <div style={{ padding: '12px 14px', borderBottom: '1px solid #f1f5f9', background: '#fafbfc' }}>
+                  <span style={{ fontSize: 12, fontWeight: 600, color: '#64748b' }}>Ordenar por</span>
+                </div>
+                
+                <div style={{ padding: '10px 14px', display: 'flex', flexDirection: 'column', gap: 10 }}>
+                  {!sortConfig ? (
+                    <button
+                      onClick={() => setSortConfig({ fieldId: visibleFields[0]?.id || '', direction: 'asc' })}
+                      style={{
+                        background: 'transparent', border: 'none', color: '#3b82f6',
+                        fontSize: 13, cursor: 'pointer', textAlign: 'left',
+                        display: 'inline-flex', alignItems: 'center', gap: 6, padding: '4px 0',
+                      }}
+                    >
+                      + Añadir ordenamiento
+                    </button>
+                  ) : (
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                      <select
+                        value={sortConfig.fieldId}
+                        onChange={(e) => setSortConfig({ ...sortConfig, fieldId: e.target.value })}
+                        style={{
+                          flex: 1, padding: '6px 8px', border: '1px solid #e2e8f0',
+                          borderRadius: 6, fontSize: 13, color: '#374151', outline: 'none',
+                        }}
+                      >
+                        {visibleFields.map(f => <option key={f.id} value={f.id}>{f.name}</option>)}
+                      </select>
+                      <select
+                        value={sortConfig.direction}
+                        onChange={(e) => setSortConfig({ ...sortConfig, direction: e.target.value as 'asc' | 'desc' })}
+                        style={{
+                          width: 100, padding: '6px 8px', border: '1px solid #e2e8f0',
+                          borderRadius: 6, fontSize: 13, color: '#374151', outline: 'none',
+                        }}
+                      >
+                        <option value="asc">Ascendente</option>
+                        <option value="desc">Descendente</option>
+                      </select>
+                      <button
+                        onClick={() => setSortConfig(null)}
+                        style={{
+                          background: 'none', border: 'none', color: '#94a3b8',
+                          cursor: 'pointer', fontSize: 18, lineHeight: 1, padding: '0 4px',
+                        }}
+                        title="Quitar"
+                      >×</button>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
         </div>
 
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -678,13 +815,21 @@ export function RecordsTable({
                     }}
                     style={{
                       ...thStyle,
+                      cursor: 'pointer',
                       background: dragFieldId === field.id ? '#f8fafc' : thStyle.background,
                       opacity: dragFieldId === field.id ? 0.3 : 1,
                       borderLeft: dragOverFieldId === field.id && dragPosition === 'left' ? '3px solid #00C4A0' : thStyle.borderLeft,
                       borderRight: dragOverFieldId === field.id && dragPosition === 'right' ? '3px solid #00C4A0' : thStyle.borderRight,
                       paddingLeft: dragOverFieldId === field.id && dragPosition === 'left' ? 13 : thStyle.paddingLeft,
                       paddingRight: dragOverFieldId === field.id && dragPosition === 'right' ? 13 : thStyle.paddingRight,
-                      transition: 'border 0.1s, padding 0.1s',
+                      transition: 'border 0.1s, padding 0.1s, background 0.1s',
+                    }}
+                    onClick={(e) => {
+                      // Solo disparar si NO se está haciendo clic en el botón de editar o el drag handle
+                      const target = e.target as HTMLElement
+                      if (target.tagName !== 'BUTTON' && target.innerText !== '⠿') {
+                        toggleSort(field.id)
+                      }
                     }}
                   >
                     <span style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
@@ -693,6 +838,11 @@ export function RecordsTable({
                       )}
                       <span style={{ fontSize: 10, color: '#94a3b8' }}>{FIELD_TYPE_ICONS[field.type] ?? 'T'}</span>
                       {field.name}
+                      {sortConfig?.fieldId === field.id && (
+                        <span style={{ color: '#00C4A0', fontSize: 14, marginLeft: 4, fontWeight: 700 }}>
+                          {sortConfig.direction === 'asc' ? '↑' : '↓'}
+                        </span>
+                      )}
                       {isAdmin && (
                         <button
                           onClick={() => setEditingField(field)}
