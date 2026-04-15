@@ -189,9 +189,10 @@ async function main() {
       // Usar la fecha de lanzamiento como createdAt para orden cronológico
       const createdAt = fecha ? new Date(fecha + 'T12:00:00Z') : new Date()
 
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       await prisma.record.create({
         data: {
-          data,
+          data: data as any,
           createdAt,
           createdByEmail: elaboradoEmail,
           createdByName: extractName(elaboradoEmail),
