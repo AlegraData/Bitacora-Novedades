@@ -176,7 +176,8 @@ function CellValue({
     }
     case 'date':
       try {
-        const d = new Date(String(value))
+        const raw = String(value).slice(0, 10)
+        const d = new Date(raw + 'T12:00:00')
         return (
           <span style={{
             display: 'inline-flex', alignItems: 'center', gap: 5,
@@ -333,10 +334,11 @@ export function RecordsTable({
       if (Array.isArray(saved) && saved.length > 0) setPinnedFieldIds(saved)
     } catch { /* ignore */ }
   }, [])
-  const [stickyLeftMap, setStickyLeftMap] = useState<Record<string, number>>({})
-  const headerRefs = useRef<Map<string, HTMLTableCellElement>>(new Map())
-  const checkboxColRef = useRef<HTMLTableCellElement>(null)
-  const deleteColRef = useRef<HTMLTableCellElement>(null)
+  // Single-table sticky columns
+  const tableRef = useRef<HTMLTableElement>(null)
+  const [stickyLefts, setStickyLefts] = useState<number[]>([])
+  // Estado de hover sincronizado entre ambos paneles
+  const [hoveredId, setHoveredId] = useState<string | null>(null)
 
   // Modals / panels
   const [editingRecord, setEditingRecord] = useState<BitacoraRecord | null | 'new'>(null)
@@ -643,31 +645,46 @@ export function RecordsTable({
     })
   }
 
-  useLayoutEffect(() => {
-    const checkboxW = checkboxColRef.current?.offsetWidth ?? 56
-    const deleteW = isAdmin ? (deleteColRef.current?.offsetWidth ?? 40) : 0
-    const map: Record<string, number> = {}
-    let acc = checkboxW + deleteW
-    for (const fid of pinnedFieldIds) {
-      map[fid] = acc
-      acc += headerRefs.current.get(fid)?.offsetWidth ?? 120
-    }
-    // Solo actualiza si los valores cambiaron — evita bucle infinito
-    setStickyLeftMap(prev => {
-      const keys = Object.keys(map)
-      const prevKeys = Object.keys(prev)
-      if (keys.length !== prevKeys.length) return map
-      if (keys.some(k => prev[k] !== map[k])) return map
-      return prev
-    })
-  }, [pinnedFieldIds, visibleFields, isAdmin])
-
   const activeFilters = (filterFieldId && filterValue)
     ? [{ fieldId: filterFieldId, value: filterValue, label: `${fields_.find(f => f.id === filterFieldId)?.name}: ${filterValue}` }]
     : []
 
+  // Campos pineados vs no pineados
+  const pinnedFields = visibleFields.filter(f => pinnedFieldIds.includes(f.id))
+  const nonPinnedFields = visibleFields.filter(f => !pinnedFieldIds.includes(f.id))
+
+  // Medir anchos de columnas fijas para calcular left de position:sticky
+  useLayoutEffect(() => {
+    const table = tableRef.current
+    if (!table) return
+    const ths = Array.from(table.querySelectorAll('thead tr th')) as HTMLElement[]
+    const fixedCount = 1 + (isAdmin ? 1 : 0)
+    const stickyCount = fixedCount + pinnedFields.length
+    const lefts: number[] = []
+    let acc = 0
+    for (let i = 0; i < stickyCount; i++) {
+      lefts.push(acc)
+      acc += ths[i]?.offsetWidth ?? 0
+    }
+    setStickyLefts(prev =>
+      prev.length === lefts.length && prev.every((v, i) => v === lefts[i]) ? prev : lefts
+    )
+  }, [paginatedRecords, pinnedFieldIds, visibleFields, isAdmin, pinnedFields.length])
+
   return (
-    <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0, overflow: 'hidden' }}>
+    <div className="bitacora-table-container" style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0, overflow: 'hidden' }}>
+      <style>{`
+        .table-scroll::-webkit-scrollbar { height: 14px; width: 14px; }
+        .table-scroll::-webkit-scrollbar-track { background: #f8fafc; border-top: 1px solid #e2e8f0; }
+        .table-scroll::-webkit-scrollbar-thumb { background: #94a3b8; border-radius: 10px; border: 4px solid #f8fafc; }
+        .table-scroll::-webkit-scrollbar-thumb:hover { background: #475569; }
+        .table-scroll { scrollbar-width: thin; scrollbar-color: #94a3b8 #f8fafc; }
+
+        tbody tr.tr-odd  { background: #fff; }
+        tbody tr.tr-even { background: #fafbfc; }
+        tbody tr.tr-selected { background: #f0fdfa; }
+        tbody tr.tr-hover { background: #f0fdfa; }
+      `}</style>
       {/* View tabs */}
       <ViewTabs
         views={views}
@@ -923,233 +940,118 @@ export function RecordsTable({
         </div>
       )}
 
-      {/* Table */}
-      <div style={{ flex: 1, minHeight: 0, overflow: 'auto', padding: '0 20px 20px' }}>
-        <div style={{
-          background: '#fff',
-          borderRadius: 12,
-          boxShadow: '0 1px 3px rgba(0,0,0,0.06), 0 4px 16px rgba(0,0,0,0.06)',
-          border: '1px solid #e8edf2',
-          overflow: 'clip',
-          minWidth: 'fit-content',
-        }}>
-          <table style={{ width: '100%', borderCollapse: 'separate', borderSpacing: 0, tableLayout: 'auto' }}>
+      {/* Tabla única con columnas sticky */}
+      <div style={{ flex: 1, minHeight: 0, overflow: 'hidden', padding: '0 20px 20px', display: 'flex', flexDirection: 'column' }}>
+        <div
+          className="table-scroll"
+          style={{
+            flex: 1,
+            minHeight: 0,
+            overflowX: 'auto',
+            overflowY: 'auto',
+            background: '#fff',
+            borderRadius: 12,
+            boxShadow: '0 1px 3px rgba(0,0,0,0.06), 0 4px 16px rgba(0,0,0,0.06)',
+            border: '1px solid #e8edf2',
+          }}
+        >
+          <table
+            ref={tableRef}
+            style={{ borderCollapse: 'separate', borderSpacing: 0, tableLayout: 'auto', minWidth: 'max-content', width: '100%' }}
+          >
             <thead>
               <tr>
-                <th ref={checkboxColRef} style={{ ...thStyle, width: 40, padding: '0 0 0 16px', position: 'sticky', top: 0, left: 0, zIndex: 4 }}>
-                  <input
-                    type="checkbox"
-                    checked={filteredRecords.length > 0 && selectedIds.size === filteredRecords.length}
-                    onChange={toggleAll}
-                    style={{ width: 16, height: 16, accentColor: '#00C4A0', cursor: 'pointer' }}
-                  />
+                <th style={{ ...thStyle, width: 40, padding: '0 0 0 16px', position: 'sticky', left: stickyLefts[0] ?? 0, top: 0, zIndex: 4 }}>
+                  <input type="checkbox" checked={filteredRecords.length > 0 && selectedIds.size === filteredRecords.length} onChange={toggleAll} style={{ width: 16, height: 16, accentColor: '#00C4A0', cursor: 'pointer' }} />
                 </th>
                 {isAdmin && (
-                  <th ref={deleteColRef} style={{ ...thStyle, width: 32, padding: '0 8px', position: 'sticky', top: 0, left: checkboxColRef.current?.offsetWidth ?? 56, zIndex: 4 }} />
+                  <th style={{ ...thStyle, width: 32, padding: '0 8px', position: 'sticky', left: stickyLefts[1] ?? 40, top: 0, zIndex: 4 }} />
                 )}
-                {visibleFields.map((field) => {
-                  const isPinned = pinnedFieldIds.includes(field.id)
-                  const isLastPinned = isPinned && pinnedFieldIds[pinnedFieldIds.length - 1] === field.id
+                {pinnedFields.map((field, i) => {
+                  const fixedCount = 1 + (isAdmin ? 1 : 0)
+                  const isLastSticky = i === pinnedFields.length - 1
                   return (
-                  <th
-                    key={field.id}
-                    ref={(el) => { if (el) headerRefs.current.set(field.id, el as HTMLTableCellElement); else headerRefs.current.delete(field.id) }}
-                    draggable={isAdmin}
-                    onDragStart={(e) => {
-                      setDragFieldId(field.id)
-                      if (e.dataTransfer) e.dataTransfer.effectAllowed = 'move'
-                    }}
-                    onDragOver={(e) => {
-                      e.preventDefault()
-                      if (!dragFieldId || dragFieldId === field.id) return
-                      setDragOverFieldId(field.id)
-                      const rect = e.currentTarget.getBoundingClientRect()
-                      const isLeft = e.clientX - rect.left < rect.width / 2
-                      setDragPosition(isLeft ? 'left' : 'right')
-                    }}
-                    onDragLeave={() => {
-                      setDragOverFieldId(null)
-                      setDragPosition(null)
-                    }}
-                    onDrop={(e) => {
-                      e.preventDefault()
-                      if (!dragFieldId || dragFieldId === field.id || !dragPosition) {
-                        setDragFieldId(null); setDragOverFieldId(null); setDragPosition(null); return
-                      }
-                      const allIds = fields_.map((f) => f.id)
-                      const fromIdx = allIds.indexOf(dragFieldId)
-                      let toIdx = allIds.indexOf(field.id)
-                      if (dragPosition === 'right') toIdx += 1
-                      if (fromIdx < toIdx) toIdx -= 1
-                      const next = [...allIds]
-                      next.splice(fromIdx, 1); next.splice(toIdx, 0, dragFieldId)
-                      startTransition(async () => {
-                        await reorderFields(next)
-                        setFields((prev) => {
-                          const map = new Map(prev.map((f) => [f.id, f]))
-                          return next.map((id, i) => ({ ...map.get(id)!, order: i + 1 }))
-                        })
-                      })
-                      setDragFieldId(null); setDragOverFieldId(null); setDragPosition(null)
-                    }}
-                    onDragEnd={() => {
-                      setDragFieldId(null); setDragOverFieldId(null); setDragPosition(null)
-                    }}
-                    style={{
-                      ...thStyle,
-                      cursor: 'pointer',
-                      background: dragFieldId === field.id ? '#f8fafc' : thStyle.background,
-                      opacity: dragFieldId === field.id ? 0.3 : 1,
-                      borderLeft: dragOverFieldId === field.id && dragPosition === 'left' ? '3px solid #00C4A0' : thStyle.borderLeft,
-                      borderRight: dragOverFieldId === field.id && dragPosition === 'right' ? '3px solid #00C4A0' : (isLastPinned ? '2px solid #cbd5e1' : thStyle.borderRight),
-                      paddingLeft: dragOverFieldId === field.id && dragPosition === 'left' ? 13 : thStyle.paddingLeft,
-                      paddingRight: dragOverFieldId === field.id && dragPosition === 'right' ? 13 : thStyle.paddingRight,
-                      transition: 'border 0.1s, padding 0.1s, background 0.1s',
-                      ...(isPinned ? { position: 'sticky', left: stickyLeftMap[field.id] ?? 0, zIndex: 4, background: '#f0fdf9' } : {}),
-                    }}
-                    onClick={(e) => {
-                      // Solo disparar si NO se está haciendo clic en el botón de editar o el drag handle
-                      const target = e.target as HTMLElement
-                      if (target.tagName !== 'BUTTON' && target.innerText !== '⠿') {
-                        toggleSort(field.id)
-                      }
-                    }}
-                  >
-                    <span style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
-                      {isAdmin && (
-                        <span style={{ color: '#cbd5e1', fontSize: 12, cursor: 'grab', lineHeight: 1 }} title="Arrastra para reordenar">⠿</span>
-                      )}
-                      <span style={{ fontSize: 10, color: '#94a3b8' }}>{FIELD_TYPE_ICONS[field.type] ?? 'T'}</span>
-                      {field.name}
-                      {sortConfig?.fieldId === field.id && (
-                        <span style={{ color: '#00C4A0', fontSize: 14, marginLeft: 4, fontWeight: 700 }}>
-                          {sortConfig.direction === 'asc' ? '↑' : '↓'}
-                        </span>
-                      )}
-                      <button
-                        onClick={(e) => { e.stopPropagation(); togglePin(field.id) }}
-                        style={{
-                          background: 'none', border: 'none', cursor: 'pointer',
-                          fontSize: 10, padding: '0 2px', lineHeight: 1,
-                          color: isPinned ? '#00C4A0' : '#cbd5e1',
-                          opacity: isPinned ? 1 : 0.6,
-                        }}
-                        title={isPinned ? 'Desfijar columna' : 'Fijar columna'}
-                      >📌</button>
-                      {isAdmin && (
-                        <button
-                          onClick={() => setEditingField(field)}
-                          style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#cbd5e1', fontSize: 11, padding: '0 2px' }}
-                          title="Editar campo"
-                        >✏️</button>
-                      )}
-                    </span>
-                  </th>
+                    <th key={field.id}
+                      style={{ ...thStyle, cursor: 'pointer', position: 'sticky', left: stickyLefts[fixedCount + i] ?? 0, top: 0, zIndex: 4, boxShadow: isLastSticky ? '4px 0 8px -2px rgba(0,196,160,0.25)' : undefined }}
+                      onClick={() => toggleSort(field.id)}
+                    >
+                      <span style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+                        <span style={{ fontSize: 10, color: '#94a3b8' }}>{FIELD_TYPE_ICONS[field.type] ?? 'T'}</span>
+                        {field.name}
+                        {sortConfig?.fieldId === field.id && <span style={{ color: '#00C4A0', fontSize: 14, fontWeight: 700 }}>{sortConfig.direction === 'asc' ? '↑' : '↓'}</span>}
+                        <button onClick={(e) => { e.stopPropagation(); togglePin(field.id) }} title="Desfijar columna" style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 14, padding: '3px 6px', lineHeight: 1, color: '#00C4A0', borderRadius: 4 }}>📌</button>
+                        {isAdmin && <button onClick={(e) => { e.stopPropagation(); setEditingField(field) }} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#cbd5e1', fontSize: 11, padding: '0 2px' }} title="Editar campo">✏️</button>}
+                      </span>
+                    </th>
                   )
                 })}
-                {isAdmin && (
-                  <th style={{ ...thStyle, cursor: 'pointer' }} onClick={() => setEditingField('new')} title="Agregar campo">
-                    + Campo
+                {nonPinnedFields.map((field) => (
+                  <th key={field.id}
+                    draggable={isAdmin}
+                    onDragStart={(e) => { setDragFieldId(field.id); if (e.dataTransfer) e.dataTransfer.effectAllowed = 'move' }}
+                    onDragOver={(e) => { e.preventDefault(); if (!dragFieldId || dragFieldId === field.id) return; setDragOverFieldId(field.id); const rect = e.currentTarget.getBoundingClientRect(); setDragPosition(e.clientX - rect.left < rect.width / 2 ? 'left' : 'right') }}
+                    onDragLeave={() => { setDragOverFieldId(null); setDragPosition(null) }}
+                    onDrop={(e) => { e.preventDefault(); if (!dragFieldId || dragFieldId === field.id || !dragPosition) { setDragFieldId(null); setDragOverFieldId(null); setDragPosition(null); return } const allIds = fields_.map(f => f.id); const fromIdx = allIds.indexOf(dragFieldId); let toIdx = allIds.indexOf(field.id); if (dragPosition === 'right') toIdx += 1; if (fromIdx < toIdx) toIdx -= 1; const next = [...allIds]; next.splice(fromIdx, 1); next.splice(toIdx, 0, dragFieldId); startTransition(async () => { await reorderFields(next); setFields(prev => { const map = new Map(prev.map(f => [f.id, f])); return next.map((id, i) => ({ ...map.get(id)!, order: i + 1 })) }) }); setDragFieldId(null); setDragOverFieldId(null); setDragPosition(null) }}
+                    onDragEnd={() => { setDragFieldId(null); setDragOverFieldId(null); setDragPosition(null) }}
+                    style={{ ...thStyle, cursor: 'pointer', position: 'sticky', top: 0, zIndex: 1, background: dragFieldId === field.id ? '#f8fafc' : thStyle.background, opacity: dragFieldId === field.id ? 0.3 : 1, borderLeft: dragOverFieldId === field.id && dragPosition === 'left' ? '3px solid #00C4A0' : thStyle.borderLeft, borderRight: dragOverFieldId === field.id && dragPosition === 'right' ? '3px solid #00C4A0' : thStyle.borderRight, transition: 'border 0.1s, background 0.1s' }}
+                    onClick={(e) => { const t = e.target as HTMLElement; if (t.tagName !== 'BUTTON' && t.innerText !== '⠿') toggleSort(field.id) }}
+                  >
+                    <span style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+                      {isAdmin && <span style={{ color: '#cbd5e1', fontSize: 12, cursor: 'grab', lineHeight: 1 }} title="Arrastra para reordenar">⠿</span>}
+                      <span style={{ fontSize: 10, color: '#94a3b8' }}>{FIELD_TYPE_ICONS[field.type] ?? 'T'}</span>
+                      {field.name}
+                      {sortConfig?.fieldId === field.id && <span style={{ color: '#00C4A0', fontSize: 14, fontWeight: 700 }}>{sortConfig.direction === 'asc' ? '↑' : '↓'}</span>}
+                      <button onClick={(e) => { e.stopPropagation(); togglePin(field.id) }} title="Fijar columna" style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 14, padding: '3px 6px', lineHeight: 1, color: '#cbd5e1', opacity: 0.6, borderRadius: 4 }}>📌</button>
+                      {isAdmin && <button onClick={(e) => { e.stopPropagation(); setEditingField(field) }} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#cbd5e1', fontSize: 11, padding: '0 2px' }} title="Editar campo">✏️</button>}
+                    </span>
                   </th>
-                )}
+                ))}
+                {isAdmin && <th style={{ ...thStyle, cursor: 'pointer', position: 'sticky', top: 0, zIndex: 1 }} onClick={() => setEditingField('new')} title="Agregar campo">+ Campo</th>}
               </tr>
             </thead>
             <tbody>
               {filteredRecords.length === 0 ? (
                 <tr>
-                  <td colSpan={visibleFields.length + (isAdmin ? 3 : 1)} style={{ textAlign: 'center', padding: '60px 20px', color: '#a0aec0' }}>
+                  <td colSpan={1 + (isAdmin ? 1 : 0) + visibleFields.length} style={{ textAlign: 'center', padding: '60px 20px', color: '#a0aec0' }}>
                     <div style={{ fontSize: 48, marginBottom: 12 }}>📋</div>
-                    <div style={{ fontSize: 15, color: '#718096', marginBottom: 4 }}>
-                      {records.length === 0 ? 'No hay registros aún' : 'Sin resultados para los filtros aplicados'}
-                    </div>
+                    <div style={{ fontSize: 15, color: '#718096', marginBottom: 4 }}>{records.length === 0 ? 'No hay registros aún' : 'Sin resultados para los filtros aplicados'}</div>
                   </td>
                 </tr>
-              ) : (
-                paginatedRecords.map((record, rowIdx) => (
+              ) : paginatedRecords.map((record, rowIdx) => {
+                const fixedCount = 1 + (isAdmin ? 1 : 0)
+                const stickyBg = (hoveredId === record.id || selectedIds.has(record.id)) ? '#f0fdfa' : rowIdx % 2 === 0 ? '#fff' : '#fafbfc'
+                return (
                   <tr key={record.id}
-                    style={{ 
-                      borderBottom: '1px solid #edf2f7', 
-                      background: selectedIds.has(record.id) ? '#f0fdfa' : (rowIdx % 2 === 1 ? '#fafbfc' : '#fff') 
-                    }}
-                    onMouseEnter={(e) => (e.currentTarget.style.background = '#f0fdfa')}
-                    onMouseLeave={(e) => (e.currentTarget.style.background = selectedIds.has(record.id) ? '#f0fdfa' : (rowIdx % 2 === 1 ? '#fafbfc' : '#fff'))}
+                    className={`${selectedIds.has(record.id) ? 'tr-selected' : rowIdx % 2 === 1 ? 'tr-even' : 'tr-odd'} ${hoveredId === record.id ? 'tr-hover' : ''}`}
+                    style={{ borderBottom: '1px solid #edf2f7' }}
+                    onMouseEnter={() => setHoveredId(record.id)}
+                    onMouseLeave={() => setHoveredId(null)}
                   >
-                    <td style={{ ...tdStyle, width: 40, padding: '0 0 0 16px', position: 'sticky', left: 0, zIndex: 2, background: selectedIds.has(record.id) ? '#f0fdfa' : (rowIdx % 2 === 1 ? '#fafbfc' : '#fff') }}>
-                      <input
-                        type="checkbox"
-                        checked={selectedIds.has(record.id)}
-                        onChange={() => toggleOne(record.id)}
-                        style={{ width: 16, height: 16, accentColor: '#00C4A0', cursor: 'pointer' }}
-                      />
+                    <td style={{ ...tdStyle, width: 40, padding: '0 0 0 16px', position: 'sticky', left: stickyLefts[0] ?? 0, zIndex: 2, background: stickyBg }}>
+                      <input type="checkbox" checked={selectedIds.has(record.id)} onChange={() => toggleOne(record.id)} style={{ width: 16, height: 16, accentColor: '#00C4A0', cursor: 'pointer' }} />
                     </td>
                     {isAdmin && (
-                      <td style={{ ...tdStyle, width: 32, padding: '0 6px', textAlign: 'center', position: 'sticky', left: checkboxColRef.current?.offsetWidth ?? 56, zIndex: 2, background: selectedIds.has(record.id) ? '#f0fdfa' : (rowIdx % 2 === 1 ? '#fafbfc' : '#fff') }}>
-                        <button
-                          onClick={() => {
-                            if (window.confirm('¿Eliminar este registro? Esta acción no se puede deshacer.'))
-                              handleDeleteRecord(record.id)
-                          }}
-                          title="Eliminar registro"
-                          style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 13, color: '#e53e3e', padding: '2px 4px', borderRadius: 4, opacity: 0.5, lineHeight: 1 }}
-                          onMouseEnter={(e) => (e.currentTarget.style.opacity = '1')}
-                          onMouseLeave={(e) => (e.currentTarget.style.opacity = '0.5')}
-                        >🗑</button>
+                      <td style={{ ...tdStyle, width: 32, padding: '0 6px', textAlign: 'center', position: 'sticky', left: stickyLefts[1] ?? 40, zIndex: 2, background: stickyBg }}>
+                        <button onClick={() => { if (window.confirm('¿Eliminar este registro? Esta acción no se puede deshacer.')) handleDeleteRecord(record.id) }} title="Eliminar registro" style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 13, color: '#e53e3e', padding: '2px 4px', borderRadius: 4, opacity: 0.5, lineHeight: 1 }} onMouseEnter={(e) => (e.currentTarget.style.opacity = '1')} onMouseLeave={(e) => (e.currentTarget.style.opacity = '0.5')}>🗑</button>
                       </td>
                     )}
-                    {visibleFields.map((field) => {
-                      const isPinned = pinnedFieldIds.includes(field.id)
-                      const isLastPinned = isPinned && pinnedFieldIds[pinnedFieldIds.length - 1] === field.id
+                    {pinnedFields.map((field, i) => {
+                      const isLastSticky = i === pinnedFields.length - 1
                       return (
-                      <td key={field.id} style={{
-                        ...tdStyle,
-                        ...(isPinned ? {
-                          position: 'sticky',
-                          left: stickyLeftMap[field.id] ?? 0,
-                          zIndex: 1,
-                          background: selectedIds.has(record.id) ? '#e8faf6' : (rowIdx % 2 === 1 ? '#f5faf8' : '#f9fefc'),
-                          borderRight: isLastPinned ? '2px solid #cbd5e1' : tdStyle.borderRight,
-                        } : {}),
-                      }}>
-                        {field.type === 'button' ? (() => {
-                          const wasTriggered = Boolean(record.data[field.id])
-                          return (
-                            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                              <span style={{
-                                display: 'inline-flex', alignItems: 'center', gap: 4,
-                                padding: '3px 8px', borderRadius: 12, fontSize: 11, fontWeight: 600,
-                                background: wasTriggered ? '#dcfce7' : '#f1f5f9',
-                                color: wasTriggered ? '#166534' : '#64748b',
-                                border: `1px solid ${wasTriggered ? '#86efac' : '#e2e8f0'}`,
-                              }}>
-                                {wasTriggered ? '✅ Sí' : '⬜ No'}
-                              </span>
-                              <button
-                                onClick={() => handleTriggerButton(record, field)}
-                                disabled={isPending}
-                                style={{
-                                  padding: '3px 8px', fontSize: 11, fontWeight: 500,
-                                  background: wasTriggered ? '#f8fafc' : '#E0F7F4',
-                                  color: wasTriggered ? '#475569' : '#00A888',
-                                  border: `1px solid ${wasTriggered ? '#e2e8f0' : '#00C4A0'}`,
-                                  borderRadius: 6, cursor: 'pointer', whiteSpace: 'nowrap',
-                                }}
-                              >
-                                {wasTriggered ? '↺ Re-ejecutar' : '⚡ Ejecutar'}
-                              </button>
-                            </div>
-                          )
-                        })() : field.id === titleFieldId ? (
-                          <TitleCell record={record} field={field} onClick={() => setDetailRecord(record)} />
-                        ) : (
-                          <CellValue field={field} value={record.data[field.id]} allTags={tags} />
-                        )}
-                      </td>
+                        <td key={field.id} style={{ ...tdStyle, position: 'sticky', left: stickyLefts[fixedCount + i] ?? 0, zIndex: 2, background: stickyBg, boxShadow: isLastSticky ? '4px 0 8px -2px rgba(0,196,160,0.25)' : undefined }}>
+                          {field.type === 'button' ? (() => { const w = Boolean(record.data[field.id]); return (<div style={{ display: 'flex', alignItems: 'center', gap: 6 }}><span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, padding: '3px 8px', borderRadius: 12, fontSize: 11, fontWeight: 600, background: w ? '#dcfce7' : '#f1f5f9', color: w ? '#166534' : '#64748b', border: `1px solid ${w ? '#86efac' : '#e2e8f0'}` }}>{w ? '✅ Sí' : '⬜ No'}</span><button onClick={() => handleTriggerButton(record, field)} disabled={isPending} style={{ padding: '3px 8px', fontSize: 11, fontWeight: 500, background: w ? '#f8fafc' : '#E0F7F4', color: w ? '#475569' : '#00A888', border: `1px solid ${w ? '#e2e8f0' : '#00C4A0'}`, borderRadius: 6, cursor: 'pointer', whiteSpace: 'nowrap' }}>{w ? '↺ Re-ejecutar' : '⚡ Ejecutar'}</button></div>) })() : field.id === titleFieldId ? <TitleCell record={record} field={field} onClick={() => setDetailRecord(record)} /> : <CellValue field={field} value={record.data[field.id]} allTags={tags} />}
+                        </td>
                       )
                     })}
+                    {nonPinnedFields.map((field) => (
+                      <td key={field.id} style={{ ...tdStyle }}>
+                        {field.type === 'button' ? (() => { const w = Boolean(record.data[field.id]); return (<div style={{ display: 'flex', alignItems: 'center', gap: 6 }}><span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, padding: '3px 8px', borderRadius: 12, fontSize: 11, fontWeight: 600, background: w ? '#dcfce7' : '#f1f5f9', color: w ? '#166534' : '#64748b', border: `1px solid ${w ? '#86efac' : '#e2e8f0'}` }}>{w ? '✅ Sí' : '⬜ No'}</span><button onClick={() => handleTriggerButton(record, field)} disabled={isPending} style={{ padding: '3px 8px', fontSize: 11, fontWeight: 500, background: w ? '#f8fafc' : '#E0F7F4', color: w ? '#475569' : '#00A888', border: `1px solid ${w ? '#e2e8f0' : '#00C4A0'}`, borderRadius: 6, cursor: 'pointer', whiteSpace: 'nowrap' }}>{w ? '↺ Re-ejecutar' : '⚡ Ejecutar'}</button></div>) })() : field.id === titleFieldId ? <TitleCell record={record} field={field} onClick={() => setDetailRecord(record)} /> : <CellValue field={field} value={record.data[field.id]} allTags={tags} />}
+                      </td>
+                    ))}
                     {isAdmin && <td style={tdStyle} />}
                   </tr>
-                ))
-              )}
+                )
+              })}
             </tbody>
           </table>
         </div>
@@ -1169,19 +1071,6 @@ export function RecordsTable({
           onClose={() => setDetailRecord(null)}
         />
       )}
-      </div>{/* fin inner content */}
-
-      {/* Pagination */}
-      <PaginationBar
-        currentPage={clampedPage}
-        totalPages={totalPages}
-        pageSize={pageSize}
-        filteredCount={filteredRecords.length}
-        totalCount={records.length}
-        onPageChange={setCurrentPage}
-        onPageSizeChange={(s) => { setPageSize(s); setCurrentPage(1) }}
-      />
-
       {editingRecord !== null && (
         <RecordEditor
           record={editingRecord === 'new' ? null : editingRecord}
@@ -1195,6 +1084,18 @@ export function RecordsTable({
           onClose={() => setEditingRecord(null)}
         />
       )}
+      </div>{/* fin inner content */}
+
+      {/* Pagination */}
+      <PaginationBar
+        currentPage={clampedPage}
+        totalPages={totalPages}
+        pageSize={pageSize}
+        filteredCount={filteredRecords.length}
+        totalCount={records.length}
+        onPageChange={setCurrentPage}
+        onPageSizeChange={(s) => { setPageSize(s); setCurrentPage(1) }}
+      />
 
       {editingField !== null && (
         <FieldEditor
