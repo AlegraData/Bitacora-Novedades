@@ -2,7 +2,7 @@
 
 import { revalidatePath } from 'next/cache'
 import { prisma } from '@/lib/prisma'
-import { requireUser, requireManager, requireAdmin } from '@/lib/auth-utils'
+import { requireUser } from '@/lib/auth-utils'
 import type { BitacoraRecord, RecordData, FilterState } from '@/types'
 import { addAuditLog } from './audit'
 import { updateRecordEmbedding } from './ai'
@@ -79,7 +79,7 @@ export async function saveRecord(data: {
   id?: string
   recordData: RecordData
 }): Promise<BitacoraRecord> {
-  const user = await requireManager()
+  const user = await requireUser()
   const isNew = !data.id
 
   const jsonData = data.recordData as unknown as Prisma.InputJsonValue
@@ -117,7 +117,7 @@ export async function saveRecord(data: {
 }
 
 export async function deleteRecord(recordId: string): Promise<void> {
-  const user = await requireAdmin()
+  const user = await requireUser()
   await prisma.record.delete({ where: { id: recordId } })
   await addAuditLog({
     userId: user.id,

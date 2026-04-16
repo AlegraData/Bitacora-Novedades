@@ -7,6 +7,18 @@ import { MultiSelectDropdown } from './multi-select-dropdown'
 
 function uid() { return Math.random().toString(36).slice(2, 10) }
 
+// ── Conditional field visibility constants ────────────────────────────────────
+const COMM_CONTROLLER = 'necesita comunicación de product marketing'
+const COMM_DEPENDENT_NAMES = new Set([
+  'usuario impactado', 'taxonomia feature', 'evento feature amplitude',
+  'comentario evento', 'link tablero amplitude', 'manual de usuario', 'artículo help center',
+])
+function naValueForType(type: string): unknown {
+  if (type === 'checkbox') return false
+  if (type === 'multiselect' || type === 'person') return []
+  return 'N/A'
+}
+
 interface RecordDetailProps {
   record: BitacoraRecord
   fields: Field[]
@@ -14,37 +26,76 @@ interface RecordDetailProps {
   userRole: Role
   onSave: (data: { id: string; recordData: RecordData }) => Promise<void>
   onClose: () => void
+  onDelete?: () => Promise<void>
 }
 
-export function RecordDetail({ record, fields, tags, userRole, onSave, onClose }: RecordDetailProps) {
+export function RecordDetail({ record, fields, tags, userRole, onSave, onClose, onDelete }: RecordDetailProps) {
   const [formData, setFormData] = useState<RecordData>(record.data)
   const [blocks, setBlocks] = useState<Block[]>(() => {
     const raw = record.data['__blocks__']
     return Array.isArray(raw) ? (raw as Block[]) : []
   })
   const [status, setStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle')
+  const [copied, setCopied] = useState(false)
+
+  function copyLink() {
+    const url = `${window.location.origin}/app?record=${record.id}`
+    navigator.clipboard.writeText(url).then(() => {
+      setCopied(true)
+      setTimeout(() => setCopied(false), 2000)
+    })
+  }
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const isFirstRender = useRef(true)
   const [dragBlockIdx, setDragBlockIdx] = useState<number | null>(null)
   const [dragOverBlockIdx, setDragOverBlockIdx] = useState<number | null>(null)
+  const [confirmDelete, setConfirmDelete] = useState(false)
+  const [deleting, setDeleting] = useState(false)
 
   const visibleFields = fields.filter((f) => f.isVisible && f.type !== 'button')
+
+  // Conditional visibility: "Necesita comunicación de Product Marketing"
+  const commField = visibleFields.find(f => f.name.toLowerCase().trim() === COMM_CONTROLLER)
+  const commIsNo = commField
+    ? (commField.type === 'checkbox'
+      ? !formData[commField.id]
+      : String(formData[commField.id] ?? '').toLowerCase().trim() === 'no')
+    : false
 
   // Detect title field (show large at top)
   const titleField = visibleFields.find((f) =>
     ['título', 'title', 'nombre', 'name'].includes(f.name.toLowerCase())
   ) ?? visibleFields[0]
-  const propertyFields = visibleFields.filter((f) => f.id !== titleField?.id)
+  const propertyFields = visibleFields.filter((f) => {
+    if (f.id === titleField?.id) return false
+    if (commIsNo && COMM_DEPENDENT_NAMES.has(f.name.toLowerCase().trim())) return false
+    return true
+  })
 
   function canEditField(field: Field) {
-    if (userRole === 'ADMIN') return true
     const perm = field.permissions.find((p) => p.role === userRole)
     if (perm) return perm.canEdit
-    return userRole === 'MANAGER'
+    return true  // All roles can edit by default
   }
 
   function setField(fieldId: string, value: unknown) {
-    setFormData((prev) => ({ ...prev, [fieldId]: value as RecordData[string] }))
+    setFormData((prev) => {
+      const next: RecordData = { ...prev, [fieldId]: value as RecordData[string] }
+      // Auto-fill dependents with N/A when controlling field is set to NO
+      if (commField && fieldId === commField.id) {
+        const nowNo = commField.type === 'checkbox'
+          ? !value
+          : String(value ?? '').toLowerCase().trim() === 'no'
+        if (nowNo) {
+          for (const f of visibleFields) {
+            if (COMM_DEPENDENT_NAMES.has(f.name.toLowerCase().trim())) {
+              next[f.id] = naValueForType(f.type) as RecordData[string]
+            }
+          }
+        }
+      }
+      return next
+    })
   }
 
   // Auto-save con debounce de 800ms
@@ -187,7 +238,7 @@ export function RecordDetail({ record, fields, tags, userRole, onSave, onClose }
           <span style={{ fontSize: 11, fontWeight: 600, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
             Detalle del registro
           </span>
-          <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
             {status === 'saving' && (
               <span style={{ fontSize: 12, color: '#94a3b8' }}>Guardando…</span>
             )}
@@ -197,6 +248,38 @@ export function RecordDetail({ record, fields, tags, userRole, onSave, onClose }
             {status === 'error' && (
               <span style={{ fontSize: 12, color: '#ef4444' }}>Error al guardar</span>
             )}
+            {/* Botón copiar enlace */}
+            <button
+              onClick={copyLink}
+              title="Copiar enlace a este registro"
+              style={{
+                display: 'flex', alignItems: 'center', gap: 5,
+                background: copied ? '#f0fdf9' : 'none',
+                border: copied ? '1px solid #00C4A0' : '1px solid #e2e8f0',
+                borderRadius: 6, cursor: 'pointer',
+                color: copied ? '#00C4A0' : '#94a3b8',
+                fontSize: 11, fontWeight: 500,
+                padding: '4px 9px', transition: 'all 0.15s',
+              }}
+            >
+              {copied ? (
+                <>
+                  <svg width="12" height="12" viewBox="0 0 14 14" fill="none">
+                    <path d="M2 7l3.5 3.5 6.5-7" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/>
+                  </svg>
+                  Copiado
+                </>
+              ) : (
+                <>
+                  <svg width="12" height="12" viewBox="0 0 14 14" fill="none">
+                    <path d="M5.5 8.5l3-3" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round"/>
+                    <path d="M3.5 9.5a2.5 2.5 0 010-3.5l1.5-1.5" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round"/>
+                    <path d="M9 4.5l1.5-1.5a2.5 2.5 0 010 3.5l-1.5 1.5" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round"/>
+                  </svg>
+                  Compartir
+                </>
+              )}
+            </button>
             <button onClick={onClose} style={{
               background: 'none', border: 'none', cursor: 'pointer',
               color: '#94a3b8', fontSize: 22, lineHeight: 1, padding: '2px 4px',
@@ -318,6 +401,77 @@ export function RecordDetail({ record, fields, tags, userRole, onSave, onClose }
               ))}
             </div>
           </div>
+
+          {/* Zona de eliminación — solo admins */}
+          {onDelete && (
+            <div style={{ marginTop: 48, paddingTop: 24, borderTop: '1px solid #f1f5f9' }}>
+              {!confirmDelete ? (
+                <button
+                  type="button"
+                  onClick={() => setConfirmDelete(true)}
+                  style={{
+                    display: 'inline-flex', alignItems: 'center', gap: 6,
+                    background: 'none', border: '1px solid #fecaca', borderRadius: 7,
+                    color: '#ef4444', fontSize: 12, fontWeight: 500,
+                    padding: '6px 14px', cursor: 'pointer',
+                    transition: 'all 0.15s',
+                  }}
+                  onMouseEnter={(e) => { e.currentTarget.style.background = '#fff5f5'; e.currentTarget.style.borderColor = '#ef4444' }}
+                  onMouseLeave={(e) => { e.currentTarget.style.background = 'none'; e.currentTarget.style.borderColor = '#fecaca' }}
+                >
+                  <span style={{ fontSize: 13 }}>🗑</span> Eliminar registro
+                </button>
+              ) : (
+                <div style={{
+                  background: '#fff5f5', border: '1px solid #fecaca',
+                  borderRadius: 10, padding: '16px 20px',
+                  display: 'flex', flexDirection: 'column', gap: 12,
+                }}>
+                  <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10 }}>
+                    <span style={{ fontSize: 20, lineHeight: 1, flexShrink: 0 }}>⚠️</span>
+                    <div>
+                      <p style={{ margin: 0, fontSize: 13, fontWeight: 600, color: '#b91c1c' }}>
+                        ¿Eliminar este registro?
+                      </p>
+                      <p style={{ margin: '3px 0 0', fontSize: 12, color: '#ef4444' }}>
+                        Esta acción es permanente y no se puede deshacer.
+                      </p>
+                    </div>
+                  </div>
+                  <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+                    <button
+                      type="button"
+                      onClick={() => setConfirmDelete(false)}
+                      disabled={deleting}
+                      style={{
+                        padding: '7px 16px', borderRadius: 7, fontSize: 13, fontWeight: 500,
+                        background: '#fff', color: '#64748b',
+                        border: '1px solid #e2e8f0', cursor: 'pointer',
+                      }}
+                    >
+                      Cancelar
+                    </button>
+                    <button
+                      type="button"
+                      disabled={deleting}
+                      onClick={async () => {
+                        setDeleting(true)
+                        try { await onDelete() } finally { setDeleting(false) }
+                      }}
+                      style={{
+                        padding: '7px 18px', borderRadius: 7, fontSize: 13, fontWeight: 600,
+                        background: deleting ? '#fca5a5' : '#ef4444', color: '#fff',
+                        border: 'none', cursor: deleting ? 'default' : 'pointer',
+                        transition: 'background 0.15s',
+                      }}
+                    >
+                      {deleting ? 'Eliminando…' : 'Sí, eliminar'}
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
         </div>
       </div>
     </>

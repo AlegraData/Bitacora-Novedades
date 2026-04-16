@@ -7,6 +7,18 @@ import { MultiSelectDropdown } from './multi-select-dropdown'
 
 function uid() { return Math.random().toString(36).slice(2, 10) }
 
+// ── Conditional field visibility constants ────────────────────────────────────
+const COMM_CONTROLLER = 'necesita comunicación de product marketing'
+const COMM_DEPENDENT_NAMES = new Set([
+  'usuario impactado', 'taxonomia feature', 'evento feature amplitude',
+  'comentario evento', 'link tablero amplitude', 'manual de usuario', 'artículo help center',
+])
+function naValueForType(type: string): unknown {
+  if (type === 'checkbox') return false
+  if (type === 'multiselect' || type === 'person') return []
+  return 'N/A'
+}
+
 interface RecordEditorProps {
   record: BitacoraRecord | null
   fields: Field[]
@@ -28,15 +40,41 @@ export function RecordEditor({ record, fields, tags, userRole, onSave, onClose }
 
   const visibleFields = fields.filter((f) => f.isVisible && f.type !== 'button')
 
+  // Conditional visibility: "Necesita comunicación de Product Marketing"
+  const commField = visibleFields.find(f => f.name.toLowerCase().trim() === COMM_CONTROLLER)
+  const commIsNo = commField
+    ? (commField.type === 'checkbox'
+      ? !formData[commField.id]
+      : String(formData[commField.id] ?? '').toLowerCase().trim() === 'no')
+    : false
+  const displayFields = visibleFields.filter(f =>
+    !(commIsNo && COMM_DEPENDENT_NAMES.has(f.name.toLowerCase().trim()))
+  )
+
   function canEditField(field: Field) {
-    if (userRole === 'ADMIN') return true
     const perm = field.permissions.find((p) => p.role === userRole)
     if (perm) return perm.canEdit
-    return userRole === 'MANAGER'
+    return true  // All roles can edit by default
   }
 
   function setField(fieldId: string, value: unknown) {
-    setFormData((prev) => ({ ...prev, [fieldId]: value as RecordData[string] }))
+    setFormData((prev) => {
+      const next: RecordData = { ...prev, [fieldId]: value as RecordData[string] }
+      // Auto-fill dependents with N/A when controlling field is set to NO
+      if (commField && fieldId === commField.id) {
+        const nowNo = commField.type === 'checkbox'
+          ? !value
+          : String(value ?? '').toLowerCase().trim() === 'no'
+        if (nowNo) {
+          for (const f of visibleFields) {
+            if (COMM_DEPENDENT_NAMES.has(f.name.toLowerCase().trim())) {
+              next[f.id] = naValueForType(f.type) as RecordData[string]
+            }
+          }
+        }
+      }
+      return next
+    })
   }
 
   function addBlock(type: Block['type']) {
@@ -207,7 +245,7 @@ export function RecordEditor({ record, fields, tags, userRole, onSave, onClose }
         {/* Body */}
         <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', flex: 1, overflow: 'hidden' }}>
           <div style={{ padding: 24, overflowY: 'auto', flex: 1 }}>
-            {visibleFields.map((field) => (
+            {displayFields.map((field) => (
               <div key={field.id} style={{ marginBottom: 18 }}>
                 <label style={{
                   display: 'block', fontSize: 12, fontWeight: 600,
@@ -220,7 +258,7 @@ export function RecordEditor({ record, fields, tags, userRole, onSave, onClose }
               </div>
             ))}
 
-            {visibleFields.length === 0 && (
+            {displayFields.length === 0 && (
               <div style={{ textAlign: 'center', color: '#a0aec0', padding: '40px 0' }}>
                 No hay campos configurados. Un administrador debe agregar campos primero.
               </div>

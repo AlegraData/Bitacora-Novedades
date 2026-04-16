@@ -12,13 +12,18 @@ export const metadata = {
   title: 'Bitácora Novedades Product | Alegra',
 }
 
-export default async function AppPage() {
+export default async function AppPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ record?: string }>
+}) {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
 
   if (!user) redirect('/auth/login')
 
-  const [userProfile, fields, tags, records, views] = await Promise.all([
+  const [{ record: initialRecordId }, userProfile, fields, tags, records, views] = await Promise.all([
+    searchParams,
     getCurrentUserProfile(),
     getFields(),
     getTags(),
@@ -48,6 +53,7 @@ export default async function AppPage() {
           userEmail={userProfile.email}
           userName={safeName}
           views={views}
+          initialRecordId={initialRecordId}
         />
       </div>
     </div>

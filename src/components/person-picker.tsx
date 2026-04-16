@@ -35,6 +35,7 @@ function Avatar({ photo, name, size = 36 }: { photo?: string | null; name: strin
       <img
         src={src}
         alt={name}
+        referrerPolicy="no-referrer"
         onError={() => setError(true)}
         style={{ width: size, height: size, borderRadius: '50%', objectFit: 'cover', flexShrink: 0 }}
       />
@@ -59,8 +60,31 @@ export function PersonPicker({ value, onChange, disabled, max }: PersonPickerPro
   const [open, setOpen] = useState(false)
   const [activeIdx, setActiveIdx] = useState(0)
   const [apiError, setApiError] = useState<string | null>(null)
+  const [fetchedPhotos, setFetchedPhotos] = useState<Record<string, string | null>>({})
   const inputRef = useRef<HTMLInputElement>(null)
   const timerRef = useRef<ReturnType<typeof setTimeout>>(undefined)
+
+  // Fetch photos for pre-existing values not already in cache
+  useEffect(() => {
+    const missing = value.filter(v => !photoCache.has(v))
+    if (missing.length === 0) return
+    missing.forEach(async (email) => {
+      try {
+        const res = await fetch(`/api/people/search?q=${encodeURIComponent(email)}`)
+        if (!res.ok) return
+        const data: Person[] = await res.json()
+        const updates: Record<string, string | null> = {}
+        for (const p of data) {
+          if (p.email) { photoCache.set(p.email, p.photo); updates[p.email] = p.photo }
+          if (p.name)  { photoCache.set(p.name,  p.photo); updates[p.name]  = p.photo }
+        }
+        if (Object.keys(updates).length > 0) {
+          setFetchedPhotos(prev => ({ ...prev, ...updates }))
+        }
+      } catch { /* ignore */ }
+    })
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [value.join(',')])
 
   const isSingle = max === 1
   const canAddMore = !max || value.length < max
@@ -141,7 +165,7 @@ export function PersonPicker({ value, onChange, disabled, max }: PersonPickerPro
       {value.length > 0 && (
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: showInput ? 8 : 0 }}>
           {value.map((label) => {
-            const cachedPhoto = photoCache.get(label) ?? null
+            const cachedPhoto = fetchedPhotos[label] ?? photoCache.get(label) ?? null
             const color = avatarColor(label)
             return (
               <span key={label} style={{

@@ -3,6 +3,25 @@
 import { useState } from 'react'
 import type { Field, Tag } from '@/types'
 
+function FieldTypeIcon({ type, size = 16 }: { type: string; size?: number }) {
+  const s = { display: 'inline-flex' as const, alignItems: 'center' as const, justifyContent: 'center' as const }
+  const c = '#64748b'
+  const w = size, h = size
+  switch (type) {
+    case 'text': return <span style={s}><svg width={w} height={h} viewBox="0 0 14 14" fill="none"><path d="M2 4.5h10M2 7.5h7M2 10.5h8.5" stroke={c} strokeWidth="1.6" strokeLinecap="round"/></svg></span>
+    case 'textarea': return <span style={s}><svg width={w} height={h} viewBox="0 0 14 14" fill="none"><path d="M2 3.5h10M2 6.5h10M2 9.5h6.5" stroke={c} strokeWidth="1.6" strokeLinecap="round"/><path d="M10 10.5l2 2-2 0" stroke={c} strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round"/></svg></span>
+    case 'number': return <span style={s}><svg width={w} height={h} viewBox="0 0 14 14" fill="none"><path d="M5.5 2l-1.5 10M10 2l-1.5 10M2 5.5h10M2 8.5h10" stroke={c} strokeWidth="1.5" strokeLinecap="round"/></svg></span>
+    case 'date': return <span style={s}><svg width={w} height={h} viewBox="0 0 14 14" fill="none"><rect x="1.5" y="2.5" width="11" height="10" rx="1.5" stroke={c} strokeWidth="1.4"/><path d="M1.5 6h11" stroke={c} strokeWidth="1.4"/><path d="M4.5 1v3M9.5 1v3" stroke={c} strokeWidth="1.5" strokeLinecap="round"/><circle cx="4.5" cy="9" r="0.9" fill={c}/><circle cx="7" cy="9" r="0.9" fill={c}/><circle cx="9.5" cy="9" r="0.9" fill={c}/></svg></span>
+    case 'select': return <span style={s}><svg width={w} height={h} viewBox="0 0 14 14" fill="none"><rect x="1.5" y="1.5" width="11" height="11" rx="2" stroke={c} strokeWidth="1.4"/><path d="M4.5 7l2.5 2.5 2.5-2.5" stroke={c} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg></span>
+    case 'multiselect': return <span style={s}><svg width={w} height={h} viewBox="0 0 14 14" fill="none"><path d="M2 4.5h5M2 9.5h5" stroke={c} strokeWidth="1.5" strokeLinecap="round"/><rect x="9" y="2.5" width="3.5" height="3.5" rx="0.8" stroke={c} strokeWidth="1.3"/><rect x="9" y="7.5" width="3.5" height="3.5" rx="0.8" stroke={c} strokeWidth="1.3"/><path d="M9.5 4.2l0.8 0.8 1.2-1.2" stroke={c} strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round"/></svg></span>
+    case 'person': return <span style={s}><svg width={w} height={h} viewBox="0 0 14 14" fill="none"><circle cx="7" cy="4.5" r="2.5" stroke={c} strokeWidth="1.4"/><path d="M2 12.5c0-2.8 2.2-5 5-5s5 2.2 5 5" stroke={c} strokeWidth="1.4" strokeLinecap="round"/></svg></span>
+    case 'button': return <span style={s}><svg width={w} height={h} viewBox="0 0 14 14" fill="none"><polygon points="3,1 13,7 3,13" stroke={c} strokeWidth="1.4" strokeLinejoin="round" fill="none"/></svg></span>
+    case 'url': return <span style={s}><svg width={w} height={h} viewBox="0 0 14 14" fill="none"><path d="M5.5 8.5l3-3" stroke={c} strokeWidth="1.4" strokeLinecap="round"/><path d="M3.5 9.5a2.5 2.5 0 010-3.5l1.5-1.5" stroke={c} strokeWidth="1.4" strokeLinecap="round"/><path d="M9 4.5l1.5-1.5a2.5 2.5 0 010 3.5l-1.5 1.5" stroke={c} strokeWidth="1.4" strokeLinecap="round"/></svg></span>
+    case 'checkbox': return <span style={s}><svg width={w} height={h} viewBox="0 0 14 14" fill="none"><rect x="1.5" y="1.5" width="11" height="11" rx="2" stroke={c} strokeWidth="1.4"/><path d="M4 7l2 2 4-4" stroke={c} strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"/></svg></span>
+    default: return <span style={s}><svg width={w} height={h} viewBox="0 0 14 14" fill="none"><path d="M2 4.5h10M2 7.5h7M2 10.5h8.5" stroke={c} strokeWidth="1.6" strokeLinecap="round"/></svg></span>
+  }
+}
+
 const FIELD_TYPES = [
   { value: 'text', label: 'Texto', icon: 'T' },
   { value: 'textarea', label: 'Texto largo', icon: '¶' },
@@ -24,6 +43,7 @@ const TAG_COLORS = [
 
 interface FieldEditorProps {
   field: Field | null
+  fields?: Field[]
   tags: Tag[]
   onSave: (data: {
     id?: string
@@ -42,6 +62,7 @@ interface FieldEditorProps {
 
 export function FieldEditor({
   field,
+  fields = [],
   tags,
   onSave,
   onDelete,
@@ -56,8 +77,8 @@ export function FieldEditor({
   const [type, setType] = useState<string>(field?.type ?? 'text')
   const [isFilterable, setIsFilterable] = useState(field?.isFilterable ?? true)
   const [isVisible, setIsVisible] = useState(field?.isVisible ?? true)
-  const [config, setConfig] = useState<Record<string, string>>(
-    (field?.config as unknown as Record<string, string>) ?? {}
+  const [config, setConfig] = useState<Record<string, unknown>>(
+    (field?.config as Record<string, unknown>) ?? {}
   )
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
@@ -168,10 +189,11 @@ export function FieldEditor({
                       cursor: 'pointer',
                       textAlign: 'center',
                       background: type === ft.value ? '#E0F7F4' : '#fff',
+                      display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6,
                     }}
                   >
-                    <div style={{ fontSize: 18, marginBottom: 4 }}>{ft.icon}</div>
-                    <div style={{ fontSize: 11, color: '#4a5568', fontWeight: 500 }}>{ft.label}</div>
+                    <FieldTypeIcon type={ft.value} size={20} />
+                    <div style={{ fontSize: 11, color: type === ft.value ? '#00A888' : '#4a5568', fontWeight: 500 }}>{ft.label}</div>
                   </button>
                 ))}
               </div>
@@ -204,37 +226,130 @@ export function FieldEditor({
             )}
 
             {/* Button config */}
-            {isButton && (
-              <div style={{ marginBottom: 18, padding: 16, background: '#f7fafc', borderRadius: 8, border: '1px solid #e2e8f0' }}>
-                <label style={{ ...labelStyle, marginBottom: 12 }}>Configuración del webhook</label>
-                <div style={{ marginBottom: 12 }}>
-                  <label style={{ ...labelStyle, fontSize: 11 }}>URL del endpoint (POST)</label>
-                  <input
-                    type="url"
-                    value={config.webhookUrl ?? ''}
-                    onChange={(e) => setConfig((prev) => ({ ...prev, webhookUrl: e.target.value }))}
-                    placeholder="https://hooks.ejemplo.com/webhook/..."
-                    style={inputStyle}
-                  />
+            {isButton && (() => {
+              const sendAll = config.sendAllFields !== false
+              const selectedIds = (config.selectedFieldIds as string[]) ?? []
+              const selectableFields = fields.filter(f => f.type !== 'button')
+              return (
+                <div style={{ marginBottom: 18, padding: 16, background: '#f7fafc', borderRadius: 8, border: '1px solid #e2e8f0' }}>
+                  <label style={{ ...labelStyle, marginBottom: 12 }}>Configuración del webhook</label>
+
+                  {/* URL */}
+                  <div style={{ marginBottom: 12 }}>
+                    <label style={{ ...labelStyle, fontSize: 11 }}>URL del endpoint (POST)</label>
+                    <input
+                      type="url"
+                      value={String(config.webhookUrl ?? '')}
+                      onChange={(e) => setConfig((prev) => ({ ...prev, webhookUrl: e.target.value }))}
+                      placeholder="https://hooks.ejemplo.com/webhook/..."
+                      style={inputStyle}
+                    />
+                  </div>
+
+                  {/* Log field */}
+                  <div style={{ marginBottom: 16 }}>
+                    <label style={{ ...labelStyle, fontSize: 11 }}>ID campo de log (opcional)</label>
+                    <input
+                      type="text"
+                      value={String(config.logFieldId ?? '')}
+                      onChange={(e) => setConfig((prev) => ({ ...prev, logFieldId: e.target.value }))}
+                      placeholder="field_id para registrar ejecuciones"
+                      style={inputStyle}
+                    />
+                    <p style={{ fontSize: 11, color: '#a0aec0', marginTop: 4 }}>
+                      Si lo indicas, cada ejecución queda registrada en ese campo de texto.
+                    </p>
+                  </div>
+
+                  {/* Campos a enviar: toggle */}
+                  <div style={{ marginBottom: 12 }}>
+                    <label style={{ ...labelStyle, fontSize: 11 }}>Campos a enviar en el webhook</label>
+                    <div style={{ display: 'flex', gap: 8 }}>
+                      {[
+                        { val: true,  label: '📋 Todos los campos' },
+                        { val: false, label: '☑ Seleccionar campos' },
+                      ].map(({ val, label }) => (
+                        <button
+                          key={String(val)}
+                          type="button"
+                          onClick={() => setConfig(prev => ({ ...prev, sendAllFields: val }))}
+                          style={{
+                            flex: 1, padding: '8px 10px', borderRadius: 8, fontSize: 12, fontWeight: 500,
+                            border: `1.5px solid ${sendAll === val ? '#00C4A0' : '#e2e8f0'}`,
+                            background: sendAll === val ? '#E0F7F4' : '#fff',
+                            color: sendAll === val ? '#00A888' : '#64748b',
+                            cursor: 'pointer', transition: 'all 0.15s',
+                          }}
+                        >
+                          {label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Listado de campos cuando se elige "Seleccionar" */}
+                  {!sendAll && (
+                    <div style={{ marginBottom: 14 }}>
+                      <label style={{ ...labelStyle, fontSize: 11 }}>
+                        Campos requeridos&nbsp;
+                        <span style={{ fontWeight: 400, color: '#94a3b8', textTransform: 'none' }}>
+                          ({selectedIds.length} seleccionados)
+                        </span>
+                      </label>
+                      {selectableFields.length === 0 ? (
+                        <p style={{ fontSize: 12, color: '#a0aec0' }}>No hay campos disponibles aún.</p>
+                      ) : (
+                        <div style={{
+                          border: '1px solid #e2e8f0', borderRadius: 8,
+                          maxHeight: 220, overflowY: 'auto',
+                        }}>
+                          {selectableFields.map((f, i) => {
+                            const checked = selectedIds.includes(f.id)
+                            return (
+                              <label
+                                key={f.id}
+                                style={{
+                                  display: 'flex', alignItems: 'center', gap: 10,
+                                  padding: '9px 12px', cursor: 'pointer',
+                                  background: checked ? '#f0fdfa' : i % 2 === 0 ? '#fff' : '#fafbfc',
+                                  borderBottom: i < selectableFields.length - 1 ? '1px solid #f1f5f9' : 'none',
+                                  transition: 'background 0.1s',
+                                }}
+                              >
+                                <input
+                                  type="checkbox"
+                                  checked={checked}
+                                  onChange={(e) => {
+                                    const next = e.target.checked
+                                      ? [...selectedIds, f.id]
+                                      : selectedIds.filter(id => id !== f.id)
+                                    setConfig(prev => ({ ...prev, selectedFieldIds: next }))
+                                  }}
+                                  style={{ width: 15, height: 15, accentColor: '#00C4A0', flexShrink: 0 }}
+                                />
+                                <FieldTypeIcon type={f.type} size={13} />
+                                <span style={{ fontSize: 13, color: '#1a202c', fontWeight: checked ? 500 : 400 }}>{f.name}</span>
+                                {checked && (
+                                  <span style={{ marginLeft: 'auto', fontSize: 10, color: '#00A888', fontWeight: 600 }}>REQUERIDO</span>
+                                )}
+                              </label>
+                            )
+                          })}
+                        </div>
+                      )}
+                      <p style={{ fontSize: 11, color: '#64748b', marginTop: 6, lineHeight: 1.5 }}>
+                        Solo se enviarán estos campos. Si alguno está vacío al ejecutar, se mostrará una alerta.
+                      </p>
+                    </div>
+                  )}
+
+                  {/* Info payload */}
+                  <div style={{ padding: '10px 14px', background: '#fffbeb', border: '1px solid #fcd34d', borderRadius: 8, fontSize: 12, color: '#92400e' }}>
+                    El endpoint recibirá: <code style={{ fontFamily: 'monospace', background: '#fef3c7', padding: '1px 4px', borderRadius: 3 }}>&#123; recordId, data, triggeredBy, triggeredAt &#125;</code>
+                  </div>
                 </div>
-                <div style={{ marginBottom: 12 }}>
-                  <label style={{ ...labelStyle, fontSize: 11 }}>ID campo de log (opcional)</label>
-                  <input
-                    type="text"
-                    value={config.logFieldId ?? ''}
-                    onChange={(e) => setConfig((prev) => ({ ...prev, logFieldId: e.target.value }))}
-                    placeholder="field_id para registrar ejecuciones"
-                    style={inputStyle}
-                  />
-                  <p style={{ fontSize: 11, color: '#a0aec0', marginTop: 4 }}>
-                    Si lo indicas, cada ejecución queda registrada en ese campo de texto.
-                  </p>
-                </div>
-                <div style={{ padding: '10px 14px', background: '#fffbeb', border: '1px solid #fcd34d', borderRadius: 8, fontSize: 12, color: '#92400e' }}>
-                  El endpoint recibirá: <code style={{ fontFamily: 'monospace', background: '#fef3c7', padding: '1px 4px', borderRadius: 3 }}>&#123; recordId, data, triggeredBy, triggeredAt &#125;</code>
-                </div>
-              </div>
-            )}
+              )
+            })()}
 
             {/* Tags management (select/multiselect) */}
             {needsTags && !isNew && (

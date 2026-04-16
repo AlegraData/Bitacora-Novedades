@@ -25,6 +25,8 @@ export async function triggerButtonWebhook(
     action: string
     webhookUrl: string
     logFieldId?: string
+    sendAllFields?: boolean
+    selectedFieldIds?: string[]
   } | null
 
   if (!config || config.action !== 'webhook') throw new Error('El botón no tiene acción "webhook".')
@@ -43,11 +45,20 @@ export async function triggerButtonWebhook(
   const allFields = await prisma.field.findMany({ orderBy: { order: 'asc' } })
   const fieldMap = new Map(allFields.map((f) => [f.id, f.name]))
 
-  // Construir payload con nombres de campo como claves, filtrando vacíos
+  // Determinar qué campo IDs incluir según config del botón
+  const sendAll = config.sendAllFields !== false
+  const allowedIds = sendAll ? null : new Set(config.selectedFieldIds ?? [])
+
+  // Construir payload con nombres de campo como claves
+  // Filtra: campos internos (__blocks__), IDs no seleccionados, valores vacíos y "N/A"
+  const EMPTY_VALUES = new Set(['n/a', 'na', 'no aplica', 'ninguno'])
   const namedData: Record<string, unknown> = {}
   for (const [fieldId, value] of Object.entries(record.data)) {
+    if (fieldId.startsWith('__')) continue
+    if (allowedIds && !allowedIds.has(fieldId)) continue
     if (value === null || value === undefined || value === '') continue
     if (Array.isArray(value) && value.length === 0) continue
+    if (typeof value === 'string' && EMPTY_VALUES.has(value.toLowerCase().trim())) continue
     const fieldName = fieldMap.get(fieldId) ?? fieldId
     namedData[fieldName] = value
   }

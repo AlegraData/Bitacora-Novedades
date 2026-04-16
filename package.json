@@ -8,7 +8,8 @@
     "start": "next start",
     "lint": "eslint",
     "seed": "npx tsx prisma/seed.ts",
-    "migrate-csv": "node prisma/migrate-csv.mjs"
+    "sync-schema": "npx tsx prisma/sync-schema.ts",
+    "migrate-csv": "npx tsx prisma/migrate-csv.ts"
   },
   "prisma": {
     "seed": "npx tsx prisma/seed.ts"

@@ -38,9 +38,12 @@ export async function middleware(request: NextRequest) {
     return NextResponse.redirect(new URL('/auth/login', request.url))
   }
 
-  // Proteger rutas /app y /admin
+  // Proteger rutas /app y /admin — preservar query params en el redirect
   if (!user && (request.nextUrl.pathname.startsWith('/app') || request.nextUrl.pathname.startsWith('/admin'))) {
-    return NextResponse.redirect(new URL('/auth/login', request.url))
+    const loginUrl = new URL('/auth/login', request.url)
+    const next = request.nextUrl.pathname + request.nextUrl.search
+    if (next !== '/app') loginUrl.searchParams.set('next', next)
+    return NextResponse.redirect(loginUrl)
   }
 
   // Si está autenticado y va a login, redirigir a /app

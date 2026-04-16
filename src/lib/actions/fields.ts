@@ -2,7 +2,7 @@
 
 import { revalidatePath } from 'next/cache'
 import { prisma } from '@/lib/prisma'
-import { requireAdmin } from '@/lib/auth-utils'
+import { requireAdmin, requireManager } from '@/lib/auth-utils'
 import type { Field, Role } from '@/types'
 import type { Prisma } from '@/generated/prisma'
 
@@ -46,7 +46,7 @@ export async function saveField(data: {
   config?: Record<string, unknown> | null
   order?: number
 }): Promise<Field> {
-  await requireAdmin()
+  await requireManager()
 
   const existingCount = await prisma.field.count()
   const order = data.order ?? existingCount + 1
@@ -85,13 +85,13 @@ export async function saveField(data: {
 }
 
 export async function deleteField(fieldId: string): Promise<void> {
-  await requireAdmin()
+  await requireManager()
   await prisma.field.delete({ where: { id: fieldId } })
   revalidatePath('/app')
 }
 
 export async function reorderFields(orderedIds: string[]): Promise<void> {
-  await requireAdmin()
+  await requireManager()
   await Promise.all(
     orderedIds.map((id, index) =>
       prisma.field.update({ where: { id }, data: { order: index + 1 } })

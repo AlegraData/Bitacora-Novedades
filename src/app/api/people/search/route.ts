@@ -31,11 +31,20 @@ export async function GET(request: NextRequest) {
   const data = await res.json()
 
   const people = ((data.people ?? []) as Record<string, any>[])
-    .map((p) => ({
-      name: (p.names as any[])?.[0]?.displayName ?? '',
-      email: (p.emailAddresses as any[])?.[0]?.value ?? '',
-      photo: (p.photos as any[])?.[0]?.url ?? null,
-    }))
+    .map((p) => {
+      const photos = (p.photos as any[]) ?? []
+      // Skip default/placeholder photos — only use real uploaded photos
+      const realPhoto = photos.find((ph: any) => !ph.default) ?? null
+      // Normalize size parameter to 96px for consistent quality
+      const photoUrl: string | null = realPhoto?.url
+        ? (realPhoto.url as string).replace(/=s\d+(-c)?$/, '=s96-c')
+        : null
+      return {
+        name: (p.names as any[])?.[0]?.displayName ?? '',
+        email: (p.emailAddresses as any[])?.[0]?.value ?? '',
+        photo: photoUrl,
+      }
+    })
     .filter((p) => p.name || p.email)
 
   return NextResponse.json(people)

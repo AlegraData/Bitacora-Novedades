@@ -13,17 +13,22 @@ import { FieldEditor } from './field-editor'
 import { Chatbot } from './chatbot'
 import { ViewTabs } from './view-tabs'
 
-const FIELD_TYPE_ICONS: Record<string, string> = {
-  text: 'T',
-  textarea: '¶',
-  number: '#',
-  date: '📅',
-  select: '▾',
-  multiselect: '▾▾',
-  person: '👤',
-  button: '⚡',
-  url: '🔗',
-  checkbox: '☑',
+function FieldTypeIcon({ type }: { type: string }) {
+  const st = { display: 'inline-flex' as const, alignItems: 'center' as const, justifyContent: 'center' as const, flexShrink: 0 }
+  const c = '#94a3b8'
+  switch (type) {
+    case 'text': return <span style={st}><svg width="13" height="13" viewBox="0 0 14 14" fill="none"><path d="M2 4.5h10M2 7.5h7M2 10.5h8.5" stroke={c} strokeWidth="1.6" strokeLinecap="round"/></svg></span>
+    case 'textarea': return <span style={st}><svg width="13" height="13" viewBox="0 0 14 14" fill="none"><path d="M2 3.5h10M2 6.5h10M2 9.5h6.5" stroke={c} strokeWidth="1.6" strokeLinecap="round"/><path d="M10 10.5l2 2-2 0" stroke={c} strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round"/></svg></span>
+    case 'number': return <span style={st}><svg width="13" height="13" viewBox="0 0 14 14" fill="none"><path d="M5.5 2l-1.5 10M10 2l-1.5 10M2 5.5h10M2 8.5h10" stroke={c} strokeWidth="1.5" strokeLinecap="round"/></svg></span>
+    case 'date': return <span style={st}><svg width="13" height="13" viewBox="0 0 14 14" fill="none"><rect x="1.5" y="2.5" width="11" height="10" rx="1.5" stroke={c} strokeWidth="1.4"/><path d="M1.5 6h11" stroke={c} strokeWidth="1.4"/><path d="M4.5 1v3M9.5 1v3" stroke={c} strokeWidth="1.5" strokeLinecap="round"/><circle cx="4.5" cy="9" r="0.9" fill={c}/><circle cx="7" cy="9" r="0.9" fill={c}/><circle cx="9.5" cy="9" r="0.9" fill={c}/></svg></span>
+    case 'select': return <span style={st}><svg width="13" height="13" viewBox="0 0 14 14" fill="none"><rect x="1.5" y="1.5" width="11" height="11" rx="2" stroke={c} strokeWidth="1.4"/><path d="M4.5 7l2.5 2.5 2.5-2.5" stroke={c} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg></span>
+    case 'multiselect': return <span style={st}><svg width="13" height="13" viewBox="0 0 14 14" fill="none"><path d="M2 4.5h5M2 9.5h5" stroke={c} strokeWidth="1.5" strokeLinecap="round"/><rect x="9" y="2.5" width="3.5" height="3.5" rx="0.8" stroke={c} strokeWidth="1.3"/><rect x="9" y="7.5" width="3.5" height="3.5" rx="0.8" stroke={c} strokeWidth="1.3"/><path d="M9.5 4.2l0.8 0.8 1.2-1.2" stroke={c} strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round"/></svg></span>
+    case 'person': return <span style={st}><svg width="13" height="13" viewBox="0 0 14 14" fill="none"><circle cx="7" cy="4.5" r="2.5" stroke={c} strokeWidth="1.4"/><path d="M2 12.5c0-2.8 2.2-5 5-5s5 2.2 5 5" stroke={c} strokeWidth="1.4" strokeLinecap="round"/></svg></span>
+    case 'button': return <span style={st}><svg width="13" height="13" viewBox="0 0 14 14" fill="none"><polygon points="3,1 13,7 3,13" stroke={c} strokeWidth="1.4" strokeLinejoin="round" fill="none"/></svg></span>
+    case 'url': return <span style={st}><svg width="13" height="13" viewBox="0 0 14 14" fill="none"><path d="M5.5 8.5l3-3" stroke={c} strokeWidth="1.4" strokeLinecap="round"/><path d="M3.5 9.5a2.5 2.5 0 010-3.5l1.5-1.5" stroke={c} strokeWidth="1.4" strokeLinecap="round"/><path d="M9 4.5l1.5-1.5a2.5 2.5 0 010 3.5l-1.5 1.5" stroke={c} strokeWidth="1.4" strokeLinecap="round"/></svg></span>
+    case 'checkbox': return <span style={st}><svg width="13" height="13" viewBox="0 0 14 14" fill="none"><rect x="1.5" y="1.5" width="11" height="11" rx="2" stroke={c} strokeWidth="1.4"/><path d="M4 7l2 2 4-4" stroke={c} strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"/></svg></span>
+    default: return <span style={st}><svg width="13" height="13" viewBox="0 0 14 14" fill="none"><path d="M2 4.5h10M2 7.5h7M2 10.5h8.5" stroke={c} strokeWidth="1.6" strokeLinecap="round"/></svg></span>
+  }
 }
 
 const AVATAR_COLORS = ['#6366f1','#8b5cf6','#ec4899','#f59e0b','#10b981','#3b82f6','#14b8a6','#f97316']
@@ -306,6 +311,7 @@ interface RecordsTableProps {
   userEmail: string
   userName: string
   views: View[]
+  initialRecordId?: string
 }
 
 export function RecordsTable({
@@ -316,6 +322,7 @@ export function RecordsTable({
   userEmail,
   userName,
   views: initialViews,
+  initialRecordId,
 }: RecordsTableProps) {
   const [fields_, setFields] = useState<Field[]>(fields)
   const [records, setRecords] = useState<BitacoraRecord[]>(initialRecords)
@@ -344,7 +351,28 @@ export function RecordsTable({
   const [editingRecord, setEditingRecord] = useState<BitacoraRecord | null | 'new'>(null)
   const [detailRecord, setDetailRecord] = useState<BitacoraRecord | null>(null)
   const [editingField, setEditingField] = useState<Field | null | 'new'>(null)
+
+  // Deep-link: abrir registro por URL (?record=<id>) — solo en el primer render
+  useEffect(() => {
+    if (!initialRecordId) return
+    const target = records.find((r) => r.id === initialRecordId)
+    if (target) setDetailRecord(target)
+    // Solo corre una vez al montar — records es estable en este punto
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  // Sincronizar URL con el registro abierto (sin reload de página)
+  useEffect(() => {
+    const url = new URL(window.location.href)
+    if (detailRecord) {
+      url.searchParams.set('record', detailRecord.id)
+    } else {
+      url.searchParams.delete('record')
+    }
+    window.history.replaceState(null, '', url.toString())
+  }, [detailRecord])
   const [showChatbot, setShowChatbot] = useState(false)
+  const [missingFields, setMissingFields] = useState<string[]>([])
 
   // Column drag-to-reorder
   const [dragFieldId, setDragFieldId] = useState<string | null>(null)
@@ -461,8 +489,8 @@ export function RecordsTable({
   const [currentPage, setCurrentPage] = useState(1)
   const [pageSize, setPageSize] = useState(25)
 
-  const canEdit = userRole === 'ADMIN' || userRole === 'MANAGER'
-  const isAdmin = userRole === 'ADMIN'
+  const canEdit = true  // All roles can create and edit records
+  const isAdmin = userRole === 'ADMIN' || userRole === 'MANAGER'  // Field management: ADMIN + MANAGER
 
   const visibleFields = fields_.filter((f) => f.isVisible)
 
@@ -542,7 +570,6 @@ export function RecordsTable({
   }, [])
 
   const handleDeleteRecord = useCallback(async (id: string) => {
-    if (!confirm('¿Eliminar este registro?')) return
     startTransition(async () => {
       await deleteRecord(id)
       setRecords((prev) => prev.filter((r) => r.id !== id))
@@ -595,6 +622,20 @@ export function RecordsTable({
   }, [])
 
   const handleTriggerButton = useCallback(async (record: BitacoraRecord, field: Field) => {
+    // Validar campos requeridos antes de enviar
+    const btnConfig = field.config as { sendAllFields?: boolean; selectedFieldIds?: string[] } | null
+    if (btnConfig?.sendAllFields === false && (btnConfig.selectedFieldIds?.length ?? 0) > 0) {
+      const missing = (btnConfig.selectedFieldIds ?? []).filter(fId => {
+        const val = record.data[fId]
+        if (val === null || val === undefined || val === '') return true
+        if (Array.isArray(val) && val.length === 0) return true
+        return false
+      })
+      if (missing.length > 0) {
+        setMissingFields(missing.map(fId => fields_.find(f => f.id === fId)?.name ?? fId))
+        return
+      }
+    }
     startTransition(async () => {
       try {
         await triggerButtonWebhook(record.id, field.id)
@@ -608,7 +649,8 @@ export function RecordsTable({
         alert('Error: ' + (e instanceof Error ? e.message : String(e)))
       }
     })
-  }, [])
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [fields_])
 
   const toggleAll = () => {
     if (selectedIds.size === filteredRecords.length) {
@@ -658,7 +700,7 @@ export function RecordsTable({
     const table = tableRef.current
     if (!table) return
     const ths = Array.from(table.querySelectorAll('thead tr th')) as HTMLElement[]
-    const fixedCount = 1 + (isAdmin ? 1 : 0)
+    const fixedCount = 1
     const stickyCount = fixedCount + pinnedFields.length
     const lefts: number[] = []
     let acc = 0
@@ -674,11 +716,11 @@ export function RecordsTable({
   return (
     <div className="bitacora-table-container" style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0, overflow: 'hidden' }}>
       <style>{`
-        .table-scroll::-webkit-scrollbar { height: 14px; width: 14px; }
-        .table-scroll::-webkit-scrollbar-track { background: #f8fafc; border-top: 1px solid #e2e8f0; }
-        .table-scroll::-webkit-scrollbar-thumb { background: #94a3b8; border-radius: 10px; border: 4px solid #f8fafc; }
+        .table-scroll::-webkit-scrollbar { height: 20px; width: 20px; }
+        .table-scroll::-webkit-scrollbar-track { background: #f1f5f9; border-top: 1px solid #e2e8f0; }
+        .table-scroll::-webkit-scrollbar-thumb { background: #94a3b8; border-radius: 10px; border: 5px solid #f1f5f9; }
         .table-scroll::-webkit-scrollbar-thumb:hover { background: #475569; }
-        .table-scroll { scrollbar-width: thin; scrollbar-color: #94a3b8 #f8fafc; }
+        .table-scroll { scrollbar-width: auto; scrollbar-color: #94a3b8 #f1f5f9; }
 
         tbody tr.tr-odd  { background: #fff; }
         tbody tr.tr-even { background: #fafbfc; }
@@ -964,23 +1006,28 @@ export function RecordsTable({
                 <th style={{ ...thStyle, width: 40, padding: '0 0 0 16px', position: 'sticky', left: stickyLefts[0] ?? 0, top: 0, zIndex: 4 }}>
                   <input type="checkbox" checked={filteredRecords.length > 0 && selectedIds.size === filteredRecords.length} onChange={toggleAll} style={{ width: 16, height: 16, accentColor: '#00C4A0', cursor: 'pointer' }} />
                 </th>
-                {isAdmin && (
-                  <th style={{ ...thStyle, width: 32, padding: '0 8px', position: 'sticky', left: stickyLefts[1] ?? 40, top: 0, zIndex: 4 }} />
-                )}
                 {pinnedFields.map((field, i) => {
-                  const fixedCount = 1 + (isAdmin ? 1 : 0)
+                  const fixedCount = 1
                   const isLastSticky = i === pinnedFields.length - 1
                   return (
                     <th key={field.id}
                       style={{ ...thStyle, cursor: 'pointer', position: 'sticky', left: stickyLefts[fixedCount + i] ?? 0, top: 0, zIndex: 4, boxShadow: isLastSticky ? '4px 0 8px -2px rgba(0,196,160,0.25)' : undefined }}
                       onClick={() => toggleSort(field.id)}
                     >
-                      <span style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
-                        <span style={{ fontSize: 10, color: '#94a3b8' }}>{FIELD_TYPE_ICONS[field.type] ?? 'T'}</span>
-                        {field.name}
-                        {sortConfig?.fieldId === field.id && <span style={{ color: '#00C4A0', fontSize: 14, fontWeight: 700 }}>{sortConfig.direction === 'asc' ? '↑' : '↓'}</span>}
-                        <button onClick={(e) => { e.stopPropagation(); togglePin(field.id) }} title="Desfijar columna" style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 14, padding: '3px 6px', lineHeight: 1, color: '#00C4A0', borderRadius: 4 }}>📌</button>
-                        {isAdmin && <button onClick={(e) => { e.stopPropagation(); setEditingField(field) }} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#cbd5e1', fontSize: 11, padding: '0 2px' }} title="Editar campo">✏️</button>}
+                      <span style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 6, width: '100%' }}>
+                        <span style={{ display: 'flex', alignItems: 'center', gap: 5, minWidth: 0 }}>
+                          <FieldTypeIcon type={field.type} />
+                          <span style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>{field.name}</span>
+                          {sortConfig?.fieldId === field.id && <span style={{ color: '#00C4A0', fontSize: 13, fontWeight: 700, flexShrink: 0 }}>{sortConfig.direction === 'asc' ? '↑' : '↓'}</span>}
+                        </span>
+                        <span style={{ display: 'flex', gap: 3, flexShrink: 0 }}>
+                          <button onClick={(e) => { e.stopPropagation(); togglePin(field.id) }} title="Desfijar columna" style={{ width: 22, height: 22, display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#E0F7F4', border: '1px solid #00C4A0', borderRadius: 4, cursor: 'pointer', padding: 0 }}>
+                            <svg width="11" height="11" viewBox="0 0 14 14" fill="none"><path d="M7 1v8M4 4l3-3 3 3M3 9h8M7 9v4" stroke="#00A888" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"/></svg>
+                          </button>
+                          {isAdmin && <button onClick={(e) => { e.stopPropagation(); setEditingField(field) }} title="Editar campo" style={{ width: 22, height: 22, display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#f1f5f9', border: '1px solid #e2e8f0', borderRadius: 4, cursor: 'pointer', padding: 0 }}>
+                            <svg width="11" height="11" viewBox="0 0 14 14" fill="none"><path d="M9.5 2.5l2 2-7 7H2.5v-2l7-7z" stroke="#64748b" strokeWidth="1.4" strokeLinejoin="round"/></svg>
+                          </button>}
+                        </span>
                       </span>
                     </th>
                   )
@@ -994,15 +1041,23 @@ export function RecordsTable({
                     onDrop={(e) => { e.preventDefault(); if (!dragFieldId || dragFieldId === field.id || !dragPosition) { setDragFieldId(null); setDragOverFieldId(null); setDragPosition(null); return } const allIds = fields_.map(f => f.id); const fromIdx = allIds.indexOf(dragFieldId); let toIdx = allIds.indexOf(field.id); if (dragPosition === 'right') toIdx += 1; if (fromIdx < toIdx) toIdx -= 1; const next = [...allIds]; next.splice(fromIdx, 1); next.splice(toIdx, 0, dragFieldId); startTransition(async () => { await reorderFields(next); setFields(prev => { const map = new Map(prev.map(f => [f.id, f])); return next.map((id, i) => ({ ...map.get(id)!, order: i + 1 })) }) }); setDragFieldId(null); setDragOverFieldId(null); setDragPosition(null) }}
                     onDragEnd={() => { setDragFieldId(null); setDragOverFieldId(null); setDragPosition(null) }}
                     style={{ ...thStyle, cursor: 'pointer', position: 'sticky', top: 0, zIndex: 1, background: dragFieldId === field.id ? '#f8fafc' : thStyle.background, opacity: dragFieldId === field.id ? 0.3 : 1, borderLeft: dragOverFieldId === field.id && dragPosition === 'left' ? '3px solid #00C4A0' : thStyle.borderLeft, borderRight: dragOverFieldId === field.id && dragPosition === 'right' ? '3px solid #00C4A0' : thStyle.borderRight, transition: 'border 0.1s, background 0.1s' }}
-                    onClick={(e) => { const t = e.target as HTMLElement; if (t.tagName !== 'BUTTON' && t.innerText !== '⠿') toggleSort(field.id) }}
+                    onClick={(e) => { const t = e.target as HTMLElement; if (t.tagName !== 'BUTTON' && t.tagName !== 'svg' && t.tagName !== 'path' && t.tagName !== 'circle' && t.tagName !== 'polygon') toggleSort(field.id) }}
                   >
-                    <span style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
-                      {isAdmin && <span style={{ color: '#cbd5e1', fontSize: 12, cursor: 'grab', lineHeight: 1 }} title="Arrastra para reordenar">⠿</span>}
-                      <span style={{ fontSize: 10, color: '#94a3b8' }}>{FIELD_TYPE_ICONS[field.type] ?? 'T'}</span>
-                      {field.name}
-                      {sortConfig?.fieldId === field.id && <span style={{ color: '#00C4A0', fontSize: 14, fontWeight: 700 }}>{sortConfig.direction === 'asc' ? '↑' : '↓'}</span>}
-                      <button onClick={(e) => { e.stopPropagation(); togglePin(field.id) }} title="Fijar columna" style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 14, padding: '3px 6px', lineHeight: 1, color: '#cbd5e1', opacity: 0.6, borderRadius: 4 }}>📌</button>
-                      {isAdmin && <button onClick={(e) => { e.stopPropagation(); setEditingField(field) }} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#cbd5e1', fontSize: 11, padding: '0 2px' }} title="Editar campo">✏️</button>}
+                    <span style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 6, width: '100%' }}>
+                      <span style={{ display: 'flex', alignItems: 'center', gap: 5, minWidth: 0 }}>
+                        {isAdmin && <span style={{ color: '#cbd5e1', fontSize: 12, cursor: 'grab', lineHeight: 1, flexShrink: 0 }} title="Arrastra para reordenar">⠿</span>}
+                        <FieldTypeIcon type={field.type} />
+                        <span style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>{field.name}</span>
+                        {sortConfig?.fieldId === field.id && <span style={{ color: '#00C4A0', fontSize: 13, fontWeight: 700, flexShrink: 0 }}>{sortConfig.direction === 'asc' ? '↑' : '↓'}</span>}
+                      </span>
+                      <span style={{ display: 'flex', gap: 3, flexShrink: 0 }}>
+                        <button onClick={(e) => { e.stopPropagation(); togglePin(field.id) }} title="Fijar columna" style={{ width: 22, height: 22, display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#f1f5f9', border: '1px solid #e2e8f0', borderRadius: 4, cursor: 'pointer', padding: 0 }}>
+                          <svg width="11" height="11" viewBox="0 0 14 14" fill="none"><path d="M7 1v8M4 4l3-3 3 3M3 9h8M7 9v4" stroke="#94a3b8" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"/></svg>
+                        </button>
+                        {isAdmin && <button onClick={(e) => { e.stopPropagation(); setEditingField(field) }} title="Editar campo" style={{ width: 22, height: 22, display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#f1f5f9', border: '1px solid #e2e8f0', borderRadius: 4, cursor: 'pointer', padding: 0 }}>
+                          <svg width="11" height="11" viewBox="0 0 14 14" fill="none"><path d="M9.5 2.5l2 2-7 7H2.5v-2l7-7z" stroke="#64748b" strokeWidth="1.4" strokeLinejoin="round"/></svg>
+                        </button>}
+                      </span>
                     </span>
                   </th>
                 ))}
@@ -1018,7 +1073,7 @@ export function RecordsTable({
                   </td>
                 </tr>
               ) : paginatedRecords.map((record, rowIdx) => {
-                const fixedCount = 1 + (isAdmin ? 1 : 0)
+                const fixedCount = 1
                 const stickyBg = (hoveredId === record.id || selectedIds.has(record.id)) ? '#f0fdfa' : rowIdx % 2 === 0 ? '#fff' : '#fafbfc'
                 return (
                   <tr key={record.id}
@@ -1030,11 +1085,6 @@ export function RecordsTable({
                     <td style={{ ...tdStyle, width: 40, padding: '0 0 0 16px', position: 'sticky', left: stickyLefts[0] ?? 0, zIndex: 2, background: stickyBg }}>
                       <input type="checkbox" checked={selectedIds.has(record.id)} onChange={() => toggleOne(record.id)} style={{ width: 16, height: 16, accentColor: '#00C4A0', cursor: 'pointer' }} />
                     </td>
-                    {isAdmin && (
-                      <td style={{ ...tdStyle, width: 32, padding: '0 6px', textAlign: 'center', position: 'sticky', left: stickyLefts[1] ?? 40, zIndex: 2, background: stickyBg }}>
-                        <button onClick={() => { if (window.confirm('¿Eliminar este registro? Esta acción no se puede deshacer.')) handleDeleteRecord(record.id) }} title="Eliminar registro" style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 13, color: '#e53e3e', padding: '2px 4px', borderRadius: 4, opacity: 0.5, lineHeight: 1 }} onMouseEnter={(e) => (e.currentTarget.style.opacity = '1')} onMouseLeave={(e) => (e.currentTarget.style.opacity = '0.5')}>🗑</button>
-                      </td>
-                    )}
                     {pinnedFields.map((field, i) => {
                       const isLastSticky = i === pinnedFields.length - 1
                       return (
@@ -1048,7 +1098,6 @@ export function RecordsTable({
                         {field.type === 'button' ? (() => { const w = Boolean(record.data[field.id]); return (<div style={{ display: 'flex', alignItems: 'center', gap: 6 }}><span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, padding: '3px 8px', borderRadius: 12, fontSize: 11, fontWeight: 600, background: w ? '#dcfce7' : '#f1f5f9', color: w ? '#166534' : '#64748b', border: `1px solid ${w ? '#86efac' : '#e2e8f0'}` }}>{w ? '✅ Sí' : '⬜ No'}</span><button onClick={() => handleTriggerButton(record, field)} disabled={isPending} style={{ padding: '3px 8px', fontSize: 11, fontWeight: 500, background: w ? '#f8fafc' : '#E0F7F4', color: w ? '#475569' : '#00A888', border: `1px solid ${w ? '#e2e8f0' : '#00C4A0'}`, borderRadius: 6, cursor: 'pointer', whiteSpace: 'nowrap' }}>{w ? '↺ Re-ejecutar' : '⚡ Ejecutar'}</button></div>) })() : field.id === titleFieldId ? <TitleCell record={record} field={field} onClick={() => setDetailRecord(record)} /> : <CellValue field={field} value={record.data[field.id]} allTags={tags} />}
                       </td>
                     ))}
-                    {isAdmin && <td style={tdStyle} />}
                   </tr>
                 )
               })}
@@ -1069,6 +1118,10 @@ export function RecordsTable({
             setDetailRecord((prev) => prev ? { ...prev, data: data.recordData } : null)
           }}
           onClose={() => setDetailRecord(null)}
+          onDelete={async () => {
+            setDetailRecord(null)           // cerrar panel de inmediato
+            await handleDeleteRecord(detailRecord.id)
+          }}
         />
       )}
       {editingRecord !== null && (
@@ -1100,6 +1153,7 @@ export function RecordsTable({
       {editingField !== null && (
         <FieldEditor
           field={editingField === 'new' ? null : editingField}
+          fields={fields_.filter(f => f.type !== 'button')}
           tags={tags}
           onSave={async (data) => {
             await handleSaveField(data)
@@ -1116,6 +1170,73 @@ export function RecordsTable({
       )}
 
       {showChatbot && <Chatbot onClose={() => setShowChatbot(false)} />}
+
+      {/* Modal: campos requeridos incompletos */}
+      {missingFields.length > 0 && (
+        <>
+          <div
+            onClick={() => setMissingFields([])}
+            style={{ position: 'fixed', inset: 0, background: 'rgba(15,23,42,0.35)', zIndex: 500 }}
+          />
+          <div style={{
+            position: 'fixed', top: '50%', left: '50%',
+            transform: 'translate(-50%, -50%)',
+            zIndex: 501,
+            background: '#fff', borderRadius: 14,
+            boxShadow: '0 20px 60px rgba(15,23,42,0.2)',
+            width: 'min(420px, 90vw)',
+            overflow: 'hidden',
+          }}>
+            {/* Header */}
+            <div style={{ padding: '20px 24px 16px', borderBottom: '1px solid #fee2e2', background: '#fff5f5' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                <span style={{ fontSize: 22 }}>⚠️</span>
+                <div>
+                  <p style={{ margin: 0, fontSize: 15, fontWeight: 700, color: '#b91c1c' }}>
+                    Campos requeridos incompletos
+                  </p>
+                  <p style={{ margin: '2px 0 0', fontSize: 12, color: '#ef4444' }}>
+                    Completa estos campos antes de enviar
+                  </p>
+                </div>
+              </div>
+            </div>
+            {/* Field list */}
+            <div style={{ padding: '16px 24px' }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                {missingFields.map((name, i) => (
+                  <div key={i} style={{
+                    display: 'flex', alignItems: 'center', gap: 10,
+                    padding: '10px 14px', borderRadius: 8,
+                    background: '#fafafa', border: '1px solid #fecaca',
+                  }}>
+                    <span style={{
+                      width: 22, height: 22, borderRadius: '50%',
+                      background: '#fee2e2', border: '1px solid #fca5a5',
+                      display: 'flex', alignItems: 'center', justifyContent: 'center',
+                      fontSize: 11, fontWeight: 700, color: '#ef4444', flexShrink: 0,
+                    }}>{i + 1}</span>
+                    <span style={{ fontSize: 13, fontWeight: 500, color: '#1a202c' }}>{name}</span>
+                    <span style={{ marginLeft: 'auto', fontSize: 11, color: '#ef4444', fontWeight: 600 }}>VACÍO</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+            {/* Footer */}
+            <div style={{ padding: '12px 24px 20px', display: 'flex', justifyContent: 'flex-end' }}>
+              <button
+                onClick={() => setMissingFields([])}
+                style={{
+                  padding: '8px 22px', borderRadius: 8, fontSize: 13, fontWeight: 600,
+                  background: '#ef4444', color: '#fff', border: 'none', cursor: 'pointer',
+                }}
+              >
+                Entendido
+              </button>
+            </div>
+          </div>
+        </>
+      )}
     </div>
   )
 }
