@@ -6,6 +6,7 @@ import { saveRecord, deleteRecord } from '@/lib/actions/records'
 import { saveField, deleteField, reorderFields } from '@/lib/actions/fields'
 import { saveTag, deleteTag } from '@/lib/actions/tags'
 import { triggerButtonWebhook } from '@/lib/actions/webhook'
+import { triggerButtonEmail } from '@/lib/actions/email'
 import { saveView, deleteView } from '@/lib/actions/views'
 import { RecordEditor } from './record-editor'
 import { RecordDetail } from './record-detail'
@@ -556,7 +557,18 @@ export function RecordsTable({
 
   const handleSaveRecord = useCallback(async (data: { id?: string; recordData: Record<string, unknown> }) => {
     startTransition(async () => {
-      const saved = await saveRecord(data as Parameters<typeof saveRecord>[0])
+      let saved = await saveRecord(data as Parameters<typeof saveRecord>[0])
+      
+      // Auto-populate URL Bitácora if empty
+      const urlField = fields_.find(f => f.name.toLowerCase() === 'url bitácora' || f.name.toLowerCase() === 'url bitacora')
+      if (urlField && !saved.data[urlField.id]) {
+        const recordUrl = `${window.location.origin}/app?record=${saved.id}`
+        saved = await saveRecord({ 
+          id: saved.id, 
+          recordData: { ...saved.data, [urlField.id]: recordUrl } 
+        })
+      }
+
       setRecords((prev) => {
         const idx = prev.findIndex((r) => r.id === saved.id)
         if (idx >= 0) {
@@ -567,7 +579,7 @@ export function RecordsTable({
         return [saved, ...prev]
       })
     })
-  }, [])
+  }, [fields_])
 
   const handleDeleteRecord = useCallback(async (id: string) => {
     startTransition(async () => {
@@ -638,7 +650,13 @@ export function RecordsTable({
     }
     startTransition(async () => {
       try {
-        await triggerButtonWebhook(record.id, field.id)
+        const config = field.config as { action: string } | null
+        if (config?.action === 'send_email') {
+          await triggerButtonEmail(record.id, field.id)
+        } else {
+          await triggerButtonWebhook(record.id, field.id)
+        }
+        
         const now = new Date().toISOString()
         setRecords((prev) => prev.map((r) =>
           r.id === record.id

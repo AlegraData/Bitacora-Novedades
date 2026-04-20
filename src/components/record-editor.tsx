@@ -1,9 +1,11 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect, useRef, useLayoutEffect } from 'react'
 import type { Field, BitacoraRecord, Tag, Role, RecordData, Block } from '@/types'
 import { PersonPicker } from './person-picker'
 import { MultiSelectDropdown } from './multi-select-dropdown'
+import ReactMarkdown from 'react-markdown'
+import remarkGfm from 'remark-gfm'
 
 function uid() { return Math.random().toString(36).slice(2, 10) }
 
@@ -17,6 +19,13 @@ function naValueForType(type: string): unknown {
   if (type === 'checkbox') return false
   if (type === 'multiselect' || type === 'person') return []
   return 'N/A'
+}
+
+const REQUIRED_FIELD_NAMES = new Set(['título', 'tipo', 'fecha de lanzamiento', 'elaborado'])
+function isFieldEmpty(value: unknown): boolean {
+  if (value === null || value === undefined || value === '') return true
+  if (Array.isArray(value) && value.length === 0) return true
+  return false
 }
 
 interface RecordEditorProps {
@@ -51,6 +60,17 @@ export function RecordEditor({ record, fields, tags, userRole, onSave, onClose }
     !(commIsNo && COMM_DEPENDENT_NAMES.has(f.name.toLowerCase().trim()))
   )
 
+  // Auto-populate URL Bitácora if empty when opening an existing record
+  useEffect(() => {
+    if (record) {
+      const urlField = visibleFields.find(f => f.name.toLowerCase() === 'url bitácora' || f.name.toLowerCase() === 'url bitacora')
+      if (urlField && !formData[urlField.id]) {
+        const recordUrl = `${window.location.origin}/app?record=${record.id}`
+        setFormData(prev => ({ ...prev, [urlField.id]: recordUrl }))
+      }
+    }
+  }, [record]) // Only run when record changes
+
   function canEditField(field: Field) {
     const perm = field.permissions.find((p) => p.role === userRole)
     if (perm) return perm.canEdit
@@ -83,8 +103,16 @@ export function RecordEditor({ record, fields, tags, userRole, onSave, onClose }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
-    setSaving(true)
     setError('')
+    const missing = displayFields.filter(f =>
+      REQUIRED_FIELD_NAMES.has(f.name.toLowerCase().trim()) &&
+      isFieldEmpty(formData[f.id])
+    )
+    if (missing.length > 0) {
+      setError(`Completa los campos obligatorios: ${missing.map(f => f.name).join(', ')}`)
+      return
+    }
+    setSaving(true)
     try {
       await onSave({ id: record?.id, recordData: { ...formData, __blocks__: blocks as RecordData[string] } })
     } catch (err) {
@@ -94,13 +122,13 @@ export function RecordEditor({ record, fields, tags, userRole, onSave, onClose }
     }
   }
 
-  function renderField(field: Field) {
+  function renderField(field: Field, hasError = false) {
     const value = formData[field.id]
     const editable = canEditField(field)
     const fieldTags = tags.filter((t) => t.fieldId === field.id)
     const commonStyle: React.CSSProperties = {
       width: '100%', padding: '8px 12px',
-      border: '1px solid #e2e8f0', borderRadius: 8,
+      border: hasError ? '1px solid #ef4444' : '1px solid #e2e8f0', borderRadius: 8,
       fontSize: 14, outline: 'none',
       background: editable ? '#fff' : '#f7fafc',
       color: editable ? '#1a202c' : '#718096',
@@ -190,7 +218,7 @@ export function RecordEditor({ record, fields, tags, userRole, onSave, onClose }
         const selected = Array.isArray(value) ? (value as string[]) : String(value || '').split(',').map((v) => v.trim()).filter(Boolean)
         const personConfig = field.config as { multiple?: boolean } | null
         const max = personConfig?.multiple === false ? 1 : undefined
-        return (
+        const el = (
           <PersonPicker
             value={selected}
             onChange={(v) => setField(field.id, v)}
@@ -198,6 +226,7 @@ export function RecordEditor({ record, fields, tags, userRole, onSave, onClose }
             max={max}
           />
         )
+        return hasError ? <div style={{ borderRadius: 8, border: '1px solid #ef4444' }}>{el}</div> : el
       }
       default:
         return (
@@ -245,18 +274,22 @@ export function RecordEditor({ record, fields, tags, userRole, onSave, onClose }
         {/* Body */}
         <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', flex: 1, overflow: 'hidden' }}>
           <div style={{ padding: 24, overflowY: 'auto', flex: 1 }}>
-            {displayFields.map((field) => (
-              <div key={field.id} style={{ marginBottom: 18 }}>
-                <label style={{
-                  display: 'block', fontSize: 12, fontWeight: 600,
-                  color: '#718096', marginBottom: 6,
-                  textTransform: 'uppercase', letterSpacing: '0.4px',
-                }}>
-                  {field.name}
-                </label>
-                {renderField(field)}
-              </div>
-            ))}
+            {displayFields.map((field) => {
+              const isRequired = REQUIRED_FIELD_NAMES.has(field.name.toLowerCase().trim())
+              const reqEmpty = isRequired && isFieldEmpty(formData[field.id])
+              return (
+                <div key={field.id} style={{ marginBottom: 18 }}>
+                  <label style={{
+                    display: 'block', fontSize: 12, fontWeight: 600,
+                    color: '#718096', marginBottom: 6,
+                    textTransform: 'uppercase', letterSpacing: '0.4px',
+                  }}>
+                    {field.name}{isRequired && <span style={{ color: '#ef4444', marginLeft: 2 }}>*</span>}
+                  </label>
+                  {renderField(field, reqEmpty)}
+                </div>
+              )
+            })}
 
             {displayFields.length === 0 && (
               <div style={{ textAlign: 'center', color: '#a0aec0', padding: '40px 0' }}>
@@ -300,7 +333,7 @@ export function RecordEditor({ record, fields, tags, userRole, onSave, onClose }
               <div style={{ display: 'flex', gap: 6 }}>
                 {([
                   { type: 'paragraph' as const, label: '＋ Texto' },
-                  { type: 'bold' as const, label: '＋ Negrita' },
+                  { type: 'bold' as const, label: '＋ Título' },
                   { type: 'divider' as const, label: '＋ Línea' },
                 ]).map(({ type, label }) => (
                   <button key={type} type="button" onClick={() => addBlock(type)} style={{
@@ -361,6 +394,8 @@ export function RecordEditor({ record, fields, tags, userRole, onSave, onClose }
 
 // ── Block row component ──────────────────────────────────────────────────────
 
+import { RichTextEditor } from './rich-text-editor'
+
 function BlockRow({
   block, onUpdate, onDelete, onMoveUp, onMoveDown,
 }: {
@@ -371,6 +406,15 @@ function BlockRow({
   onMoveDown?: () => void
 }) {
   const [hovered, setHovered] = useState(false)
+  const [isEditing, setIsEditing] = useState(false)
+  const textareaRef = useRef<HTMLTextAreaElement>(null)
+
+  useLayoutEffect(() => {
+    if (isEditing && textareaRef.current) {
+      textareaRef.current.style.height = 'auto'
+      textareaRef.current.style.height = textareaRef.current.scrollHeight + 'px'
+    }
+  }, [block.content, isEditing])
 
   if (block.type === 'divider') {
     return (
@@ -390,7 +434,8 @@ function BlockRow({
     )
   }
 
-  const isBold = block.type === 'bold'
+  const isTitle = block.type === 'bold'
+  const hasContent = Boolean(block.content?.trim())
 
   return (
     <div
@@ -414,30 +459,66 @@ function BlockRow({
         }}>▼</button>
       </div>
 
-      <textarea
-        value={block.content ?? ''}
-        onChange={(e) => {
-          onUpdate(e.target.value)
-          e.target.style.height = 'auto'
-          e.target.style.height = e.target.scrollHeight + 'px'
-        }}
-        placeholder={isBold ? 'Título en negrita…' : 'Escribe algo…'}
-        rows={1}
-        style={{
-          flex: 1, resize: 'none', overflow: 'hidden',
-          padding: '6px 10px',
-          border: `1px solid ${hovered ? '#e2e8f0' : 'transparent'}`,
-          borderRadius: 6,
-          fontSize: isBold ? 15 : 14,
-          fontWeight: isBold ? 700 : 400,
-          color: '#0f172a', fontFamily: 'inherit',
-          background: hovered ? '#f8fafc' : 'transparent',
-          outline: 'none', lineHeight: 1.55,
-          transition: 'border-color 0.12s, background 0.12s',
-        }}
-        onFocus={(e) => { e.target.style.background = '#fff'; e.target.style.borderColor = '#00C4A0' }}
-        onBlur={(e) => { e.target.style.background = hovered ? '#f8fafc' : 'transparent'; e.target.style.borderColor = hovered ? '#e2e8f0' : 'transparent' }}
-      />
+      <div style={{ flex: 1, minWidth: 0 }}>
+        {isTitle ? (
+          isEditing || !hasContent ? (
+            <textarea
+              ref={textareaRef}
+              value={block.content ?? ''}
+              onChange={(e) => {
+                onUpdate(e.target.value)
+                e.target.style.height = 'auto'
+                e.target.style.height = e.target.scrollHeight + 'px'
+              }}
+              placeholder="Título…"
+              rows={1}
+              autoFocus={isEditing}
+              style={{
+                width: '100%', resize: 'none', overflow: 'hidden',
+                padding: '6px 10px',
+                border: `1px solid ${hovered ? '#e2e8f0' : 'transparent'}`,
+                borderRadius: 6,
+                fontSize: 18,
+                fontWeight: 700,
+                color: '#0f172a', fontFamily: 'inherit',
+                background: hovered ? '#f8fafc' : 'transparent',
+                outline: 'none', lineHeight: 1.55,
+                transition: 'border-color 0.12s, background 0.12s',
+              }}
+              onFocus={(e) => { e.target.style.background = '#fff'; e.target.style.borderColor = '#00C4A0' }}
+              onBlur={() => {
+                if (hasContent) setIsEditing(false)
+              }}
+            />
+          ) : (
+            <div
+              onClick={() => setIsEditing(true)}
+              className="markdown-title"
+              style={{
+                padding: '6px 10px',
+                border: '1px solid transparent',
+                borderRadius: 6,
+                cursor: 'text',
+                fontSize: 18,
+                fontWeight: 700,
+                color: '#0f172a', lineHeight: 1.55,
+                minHeight: 34,
+              }}
+            >
+              <div>{block.content}</div>
+            </div>
+          )
+        ) : (
+          <div className={`block-row-content ${hovered ? 'is-hovered' : ''}`}>
+            <RichTextEditor
+              content={block.content ?? ''}
+              onChange={onUpdate}
+              editable={true}
+              autoFocus={false}
+            />
+          </div>
+        )}
+      </div>
 
       {/* Delete */}
       <button type="button" onClick={onDelete} style={{

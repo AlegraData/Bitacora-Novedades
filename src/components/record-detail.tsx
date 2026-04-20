@@ -1,9 +1,13 @@
 'use client'
 
-import { useState, useRef, useEffect } from 'react'
+import { useState, useRef, useEffect, useTransition, useCallback, useLayoutEffect } from 'react'
 import type { Field, BitacoraRecord, Tag, Role, RecordData, Block } from '@/types'
 import { PersonPicker } from './person-picker'
 import { MultiSelectDropdown } from './multi-select-dropdown'
+import { triggerButtonWebhook } from '@/lib/actions/webhook'
+import { triggerButtonEmail } from '@/lib/actions/email'
+import ReactMarkdown from 'react-markdown'
+import remarkGfm from 'remark-gfm'
 
 function uid() { return Math.random().toString(36).slice(2, 10) }
 
@@ -17,6 +21,13 @@ function naValueForType(type: string): unknown {
   if (type === 'checkbox') return false
   if (type === 'multiselect' || type === 'person') return []
   return 'N/A'
+}
+
+const REQUIRED_FIELD_NAMES = new Set(['título', 'tipo', 'fecha de lanzamiento', 'elaborado'])
+function isFieldEmpty(value: unknown): boolean {
+  if (value === null || value === undefined || value === '') return true
+  if (Array.isArray(value) && value.length === 0) return true
+  return false
 }
 
 interface RecordDetailProps {
@@ -51,11 +62,13 @@ export function RecordDetail({ record, fields, tags, userRole, onSave, onClose, 
   const [dragOverBlockIdx, setDragOverBlockIdx] = useState<number | null>(null)
   const [confirmDelete, setConfirmDelete] = useState(false)
   const [deleting, setDeleting] = useState(false)
+  const [isPending, startTransition] = useTransition()
 
-  const visibleFields = fields.filter((f) => f.isVisible && f.type !== 'button')
+  const dataFields = fields.filter((f) => f.isVisible && f.type !== 'button')
+  const buttonFields = fields.filter((f) => f.isVisible && f.type === 'button')
 
   // Conditional visibility: "Necesita comunicación de Product Marketing"
-  const commField = visibleFields.find(f => f.name.toLowerCase().trim() === COMM_CONTROLLER)
+  const commField = dataFields.find(f => f.name.toLowerCase().trim() === COMM_CONTROLLER)
   const commIsNo = commField
     ? (commField.type === 'checkbox'
       ? !formData[commField.id]
@@ -63,20 +76,55 @@ export function RecordDetail({ record, fields, tags, userRole, onSave, onClose, 
     : false
 
   // Detect title field (show large at top)
-  const titleField = visibleFields.find((f) =>
+  const titleField = dataFields.find((f) =>
     ['título', 'title', 'nombre', 'name'].includes(f.name.toLowerCase())
-  ) ?? visibleFields[0]
-  const propertyFields = visibleFields.filter((f) => {
+  ) ?? dataFields[0]
+  const propertyFields = dataFields.filter((f) => {
     if (f.id === titleField?.id) return false
     if (commIsNo && COMM_DEPENDENT_NAMES.has(f.name.toLowerCase().trim())) return false
     return true
   })
+
+  // Auto-populate URL Bitácora if empty when opening the record
+  useEffect(() => {
+    const urlField = dataFields.find(f => f.name.toLowerCase() === 'url bitácora' || f.name.toLowerCase() === 'url bitacora')
+    if (urlField && !formData[urlField.id]) {
+      const recordUrl = `${window.location.origin}/app?record=${record.id}`
+      setFormData(prev => ({ ...prev, [urlField.id]: recordUrl }))
+    }
+  }, [record.id]) // Only run when opening a record
+
+  const missingRequired = dataFields.filter(f =>
+    REQUIRED_FIELD_NAMES.has(f.name.toLowerCase().trim()) &&
+    isFieldEmpty(formData[f.id])
+  )
 
   function canEditField(field: Field) {
     const perm = field.permissions.find((p) => p.role === userRole)
     if (perm) return perm.canEdit
     return true  // All roles can edit by default
   }
+
+  const handleTriggerButton = useCallback(async (field: Field) => {
+    startTransition(async () => {
+      try {
+        const config = field.config as { action: string } | null
+        if (config?.action === 'send_email') {
+          await triggerButtonEmail(record.id, field.id)
+        } else {
+          await triggerButtonWebhook(record.id, field.id)
+        }
+        
+        const now = new Date().toISOString()
+        const newData = { ...formData, [field.id]: now }
+        setFormData(newData)
+        // Also save immediately
+        await onSave({ id: record.id, recordData: { ...newData, __blocks__: blocks as RecordData[string] } })
+      } catch (e: unknown) {
+        alert('Error: ' + (e instanceof Error ? e.message : String(e)))
+      }
+    })
+  }, [record.id, formData, blocks, onSave])
 
   function setField(fieldId: string, value: unknown) {
     setFormData((prev) => {
@@ -87,7 +135,7 @@ export function RecordDetail({ record, fields, tags, userRole, onSave, onClose, 
           ? !value
           : String(value ?? '').toLowerCase().trim() === 'no'
         if (nowNo) {
-          for (const f of visibleFields) {
+          for (const f of dataFields) {
             if (COMM_DEPENDENT_NAMES.has(f.name.toLowerCase().trim())) {
               next[f.id] = naValueForType(f.type) as RecordData[string]
             }
@@ -124,13 +172,13 @@ export function RecordDetail({ record, fields, tags, userRole, onSave, onClose, 
 
   // ── Field rendering ───────────────────────────────────────────────────────
 
-  function renderField(field: Field) {
+  function renderField(field: Field, hasError = false) {
     const value = formData[field.id]
     const editable = canEditField(field)
     const fieldTags = tags.filter((t) => t.fieldId === field.id)
     const base: React.CSSProperties = {
       width: '100%', padding: '6px 9px',
-      border: '1px solid #e2e8f0', borderRadius: 6,
+      border: hasError ? '1px solid #ef4444' : '1px solid #e2e8f0', borderRadius: 6,
       fontSize: 13, outline: 'none', fontFamily: 'inherit',
       background: editable ? '#fff' : '#f8fafc',
       color: editable ? '#1a202c' : '#94a3b8',
@@ -198,7 +246,8 @@ export function RecordDetail({ record, fields, tags, userRole, onSave, onClose, 
           : String(value ?? '').split(',').map((v) => v.trim()).filter(Boolean)
         const personConfig = field.config as { multiple?: boolean } | null
         const max = personConfig?.multiple === false ? 1 : undefined
-        return <PersonPicker value={selected} onChange={(v) => setField(field.id, v)} disabled={!editable} max={max} />
+        const el = <PersonPicker value={selected} onChange={(v) => setField(field.id, v)} disabled={!editable} max={max} />
+        return hasError ? <div style={{ borderRadius: 6, border: '1px solid #ef4444' }}>{el}</div> : el
       }
       default:
         return <input type="text" value={String(value ?? '')}
@@ -314,33 +363,102 @@ export function RecordDetail({ record, fields, tags, userRole, onSave, onClose, 
             </div>
           )}
 
+          {/* Required fields warning */}
+          {missingRequired.length > 0 && (
+            <div style={{
+              marginBottom: 20,
+              padding: '10px 14px',
+              background: '#fffbeb',
+              border: '1px solid #fcd34d',
+              borderRadius: 8,
+              fontSize: 13, color: '#92400e',
+              display: 'flex', alignItems: 'flex-start', gap: 8,
+            }}>
+              <span style={{ fontSize: 15, lineHeight: 1.4, flexShrink: 0 }}>⚠</span>
+              <span>
+                <strong style={{ fontWeight: 600 }}>Campos obligatorios incompletos: </strong>
+                {missingRequired.map(f => f.name).join(', ')}
+              </span>
+            </div>
+          )}
+
           {/* Properties */}
           {propertyFields.length > 0 && (
             <div style={{
               borderRadius: 10, border: '1px solid #e2e8f0',
               overflow: 'hidden', marginBottom: 36,
             }}>
-              {propertyFields.map((field, i) => (
-                <div key={field.id} style={{
-                  display: 'grid', gridTemplateColumns: '148px 1fr',
-                  alignItems: 'start',
-                  borderBottom: i < propertyFields.length - 1 ? '1px solid #f1f5f9' : 'none',
-                }}>
-                  <div style={{
-                    padding: '10px 14px',
-                    fontSize: 11, fontWeight: 600, color: '#64748b',
-                    textTransform: 'uppercase', letterSpacing: '0.05em',
-                    background: '#f8fafc',
-                    borderRight: '1px solid #f1f5f9',
-                    paddingTop: 13,
+              {propertyFields.map((field, i) => {
+                const isRequired = REQUIRED_FIELD_NAMES.has(field.name.toLowerCase().trim())
+                const reqEmpty = isRequired && isFieldEmpty(formData[field.id])
+                return (
+                  <div key={field.id} style={{
+                    display: 'grid', gridTemplateColumns: '148px 1fr',
+                    alignItems: 'start',
+                    borderBottom: i < propertyFields.length - 1 ? '1px solid #f1f5f9' : 'none',
                   }}>
-                    {field.name}
+                    <div style={{
+                      padding: '10px 14px',
+                      fontSize: 11, fontWeight: 600, color: '#64748b',
+                      textTransform: 'uppercase', letterSpacing: '0.05em',
+                      background: '#f8fafc',
+                      borderRight: '1px solid #f1f5f9',
+                      paddingTop: 13,
+                    }}>
+                      {field.name}{isRequired && <span style={{ color: '#ef4444', marginLeft: 2 }}>*</span>}
+                    </div>
+                    <div style={{ padding: '8px 12px', background: '#fff' }}>
+                      {renderField(field, reqEmpty)}
+                    </div>
                   </div>
-                  <div style={{ padding: '8px 12px', background: '#fff' }}>
-                    {renderField(field)}
-                  </div>
-                </div>
-              ))}
+                )
+              })}
+            </div>
+          )}
+
+          {/* Actions / Buttons */}
+          {buttonFields.length > 0 && (
+            <div style={{ marginBottom: 36 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 16 }}>
+                <span style={{ fontSize: 11, fontWeight: 600, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.05em', whiteSpace: 'nowrap' }}>
+                  Acciones
+                </span>
+                <div style={{ flex: 1, height: 1, background: '#e2e8f0' }} />
+              </div>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12 }}>
+                {buttonFields.map((field) => {
+                  const executed = Boolean(formData[field.id])
+                  return (
+                    <div key={field.id} style={{ 
+                      display: 'flex', alignItems: 'center', gap: 12, 
+                      padding: '12px 16px', borderRadius: 10, border: '1px solid #e2e8f0',
+                      background: '#f8fafc',
+                      minWidth: 200,
+                    }}>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 2, flex: 1 }}>
+                        <span style={{ fontSize: 11, fontWeight: 700, color: '#64748b', textTransform: 'uppercase' }}>{field.name}</span>
+                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 12, color: executed ? '#166534' : '#64748b' }}>
+                          {executed ? '✅ Sí' : '⬜ No'}
+                        </span>
+                      </div>
+                      <button
+                        onClick={() => handleTriggerButton(field)}
+                        disabled={isPending}
+                        style={{
+                          padding: '8px 16px', borderRadius: 8, fontSize: 13, fontWeight: 600,
+                          background: executed ? '#fff' : '#E0F7F4',
+                          color: executed ? '#475569' : '#00A888',
+                          border: `1px solid ${executed ? '#e2e8f0' : '#00C4A0'}`,
+                          cursor: isPending ? 'default' : 'pointer',
+                          boxShadow: '0 1px 2px rgba(0,0,0,0.05)',
+                        }}
+                      >
+                        {executed ? '↺ Re-ejecutar' : '⚡ Ejecutar'}
+                      </button>
+                    </div>
+                  )
+                })}
+              </div>
             </div>
           )}
 
@@ -388,7 +506,7 @@ export function RecordDetail({ record, fields, tags, userRole, onSave, onClose, 
             <div style={{ display: 'flex', gap: 6 }}>
               {([
                 { type: 'paragraph' as const, label: '＋ Texto' },
-                { type: 'bold' as const, label: '＋ Negrita' },
+                { type: 'bold' as const, label: '＋ Título' },
                 { type: 'divider' as const, label: '＋ Línea' },
               ]).map(({ type, label }) => (
                 <button key={type} type="button" onClick={() => addBlock(type)} style={{
@@ -480,6 +598,8 @@ export function RecordDetail({ record, fields, tags, userRole, onSave, onClose, 
 
 // ── Block row component ──────────────────────────────────────────────────────
 
+import { RichTextEditor } from './rich-text-editor'
+
 function BlockRow({
   block, onUpdate, onDelete, onDragStart, onDragOver, onDrop, isDragOver,
 }: {
@@ -491,6 +611,9 @@ function BlockRow({
   onDrop: () => void
   isDragOver: boolean
 }) {
+  const [isEditing, setIsEditing] = useState(false)
+  const textareaRef = useRef<HTMLTextAreaElement>(null)
+
   const rowStyle: React.CSSProperties = {
     display: 'flex', alignItems: 'flex-start', gap: 6, padding: '2px 0',
     borderTop: isDragOver ? '2px solid #00C4A0' : '2px solid transparent',
@@ -517,6 +640,13 @@ function BlockRow({
     }}>×</button>
   )
 
+  useLayoutEffect(() => {
+    if (isEditing && textareaRef.current) {
+      textareaRef.current.style.height = 'auto'
+      textareaRef.current.style.height = textareaRef.current.scrollHeight + 'px'
+    }
+  }, [block.content, isEditing])
+
   if (block.type === 'divider') {
     return (
       <div
@@ -531,34 +661,72 @@ function BlockRow({
     )
   }
 
-  const isBold = block.type === 'bold'
+  const isTitle = block.type === 'bold'
+  const hasContent = Boolean(block.content?.trim())
 
   return (
     <div style={rowStyle} onDragOver={onDragOver} onDrop={onDrop}>
       {handle}
-      <textarea
-        value={block.content ?? ''}
-        onChange={(e) => {
-          onUpdate(e.target.value)
-          e.target.style.height = 'auto'
-          e.target.style.height = e.target.scrollHeight + 'px'
-        }}
-        placeholder={isBold ? 'Título en negrita…' : 'Escribe algo…'}
-        rows={1}
-        style={{
-          flex: 1, resize: 'none', overflow: 'hidden',
-          padding: '6px 10px',
-          border: '1px solid #e2e8f0',
-          borderRadius: 6,
-          fontSize: isBold ? 15 : 14,
-          fontWeight: isBold ? 700 : 400,
-          color: '#0f172a', fontFamily: 'inherit',
-          background: '#fafafa',
-          outline: 'none', lineHeight: 1.55,
-        }}
-        onFocus={(e) => { e.target.style.background = '#fff'; e.target.style.borderColor = '#00C4A0' }}
-        onBlur={(e) => { e.target.style.background = '#fafafa'; e.target.style.borderColor = '#e2e8f0' }}
-      />
+      <div style={{ flex: 1, minWidth: 0 }}>
+        {isTitle ? (
+          // Title uses simple textarea to prevent rich text in titles
+          isEditing || !hasContent ? (
+            <textarea
+              ref={textareaRef}
+              value={block.content ?? ''}
+              onChange={(e) => {
+                onUpdate(e.target.value)
+                e.target.style.height = 'auto'
+                e.target.style.height = e.target.scrollHeight + 'px'
+              }}
+              placeholder="Título…"
+              rows={1}
+              autoFocus={isEditing}
+              style={{
+                width: '100%', resize: 'none', overflow: 'hidden',
+                padding: '6px 10px',
+                border: '1px solid #00C4A0',
+                borderRadius: 6,
+                fontSize: 18,
+                fontWeight: 700,
+                color: '#0f172a', fontFamily: 'inherit',
+                background: '#fff',
+                outline: 'none', lineHeight: 1.55,
+              }}
+              onBlur={() => {
+                if (hasContent) setIsEditing(false)
+              }}
+            />
+          ) : (
+            <div
+              onClick={() => setIsEditing(true)}
+              className="markdown-title"
+              style={{
+                padding: '6px 10px',
+                border: '1px solid transparent',
+                borderRadius: 6,
+                cursor: 'text',
+                fontSize: 18,
+                fontWeight: 700,
+                color: '#0f172a', lineHeight: 1.55,
+                minHeight: 34,
+              }}
+            >
+              <div>{block.content}</div>
+            </div>
+          )
+        ) : (
+          // Paragraph uses RichTextEditor
+          <div className={`block-row-content is-hovered`}>
+            <RichTextEditor
+              content={block.content ?? ''}
+              onChange={onUpdate}
+              editable={true}
+              autoFocus={false}
+            />
+          </div>
+        )}
+      </div>
       {deleteBtn}
     </div>
   )

@@ -40,3 +40,140 @@ input, select, textarea, button {
 ::-webkit-scrollbar-thumb:hover {
   background: #a0aec0;
 }
+
+/* Markdown styling (Notion-like) & Tiptap */
+.markdown-body, .tiptap-editor-container {
+  word-break: break-word;
+}
+.markdown-body p, .tiptap-editor-container p {
+  margin-bottom: 0.5em;
+}
+.markdown-body p:last-child, .tiptap-editor-container p:last-child {
+  margin-bottom: 0;
+}
+.markdown-body a, .tiptap-editor-container a {
+  color: #00C4A0;
+  text-decoration: none;
+  border-bottom: 1px solid transparent;
+  transition: border-color 0.15s;
+  cursor: pointer;
+}
+.markdown-body a:hover, .tiptap-editor-container a:hover {
+  border-bottom-color: #00C4A0;
+}
+.markdown-body ul, .markdown-body ol, .tiptap-editor-container ul, .tiptap-editor-container ol {
+  padding-left: 1.5em;
+  margin-bottom: 0.5em;
+}
+.markdown-body ul, .tiptap-editor-container ul {
+  list-style-type: disc;
+}
+.markdown-body ol, .tiptap-editor-container ol {
+  list-style-type: decimal;
+}
+.markdown-body code, .tiptap-editor-container code {
+  background: #f1f5f9;
+  padding: 0.2em 0.4em;
+  border-radius: 4px;
+  font-size: 0.9em;
+  font-family: ui-monospace, SFMono-Regular, Consolas, "Liberation Mono", Menlo, monospace;
+  color: #e11d48;
+}
+.markdown-body pre, .tiptap-editor-container pre {
+  background: #f8fafc;
+  padding: 12px;
+  border-radius: 6px;
+  overflow-x: auto;
+  border: 1px solid #e2e8f0;
+  margin-bottom: 0.5em;
+}
+.markdown-body pre code, .tiptap-editor-container pre code {
+  background: transparent;
+  padding: 0;
+  color: #334155;
+  font-size: 0.85em;
+}
+.markdown-body blockquote, .tiptap-editor-container blockquote {
+  border-left: 3px solid #cbd5e1;
+  padding-left: 1em;
+  color: #64748b;
+  margin-left: 0;
+  margin-right: 0;
+}
+.tiptap-editor-container:focus {
+  outline: none;
+}
+.tiptap-editor-container p.is-editor-empty:first-child::before {
+  color: #94a3b8;
+  content: attr(data-placeholder);
+  float: left;
+  height: 0;
+  pointer-events: none;
+}
+
+/* Tiptap Floating Toolbar */
+.tiptap-floating-toolbar {
+  position: absolute;
+  top: -44px;
+  left: -24px;
+  display: flex;
+  align-items: center;
+  background-color: #ffffff;
+  padding: 4px;
+  border-radius: 8px;
+  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 4px 10px -5px rgba(0, 0, 0, 0.05);
+  border: 1px solid #e2e8f0;
+  gap: 2px;
+  z-index: 50;
+  animation: fadeIn 0.15s ease-out;
+}
+.tiptap-floating-toolbar button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border: none;
+  background: transparent;
+  color: #4a5568;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+.tiptap-floating-toolbar button:hover {
+  background-color: #f1f5f9;
+  color: #1a202c;
+}
+.tiptap-floating-toolbar button.is-active {
+  background-color: #E0F7F4;
+  color: #00A888;
+}
+.tiptap-floating-toolbar .divider {
+  width: 1px;
+  height: 16px;
+  background-color: #e2e8f0;
+  margin: 0 4px;
+}
+
+.markdown-title {
+  margin-bottom: 0;
+}
+
+/* Block Row Editor styles */
+.block-row-content {
+  border-radius: 6px;
+  border: 1px solid transparent;
+  transition: border-color 0.12s, background 0.12s;
+}
+.block-row-content.is-hovered {
+  background: #f8fafc;
+  border-color: #e2e8f0;
+}
+.block-row-content:focus-within {
+  background: #fff !important;
+  border-color: #00C4A0 !important;
+}
+.block-row-content .tiptap-editor-container {
+  padding: 6px 10px;
+}
+
