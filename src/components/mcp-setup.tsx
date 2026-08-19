@@ -10,8 +10,6 @@ const OPENCODE_SNIPPET = `"bitacora": {
   "enabled": true
 }`
 
-const CLAUDE_CODE_SNIPPET = `claude mcp add --transport http bitacora ${MCP_URL}`
-
 function CopyButton({ text }: { text: string }) {
   const [copied, setCopied] = useState(false)
 
@@ -88,24 +86,14 @@ export function McpSetup() {
         <CodeBlock code="opencode mcp auth bitacora" />
       </Section>
 
-      <Section title="Claude Code">
-        <p style={{ fontSize: 13, color: '#718096' }}>
-          Corre esto en tu terminal. La primera vez que uses una herramienta te va a pedir autorizar en el navegador.
+      <Section title="Claude (Desktop, Claude.ai y Claude Code)">
+        <p style={{ fontSize: 13, color: '#718096', marginBottom: 8 }}>
+          Bitácora está disponible como <strong>conector personalizado a nivel de organización</strong> — no necesitas configurar nada por tu cuenta ni escribir código. Una vez habilitado por un admin del workspace de Claude, aparece automáticamente en Claude Desktop, Claude.ai y Claude Code para todo el equipo.
         </p>
-        <CodeBlock code={CLAUDE_CODE_SNIPPET} />
-      </Section>
-
-      <Section title="Claude.ai / Claude Desktop (conector personalizado)">
         <ol style={{ fontSize: 13, color: '#4a5568', paddingLeft: 20, lineHeight: 1.8 }}>
-          <li>Ve a Settings → Connectors → Add custom connector.</li>
-          <li>
-            Pega la URL: <code>{MCP_URL}</code>
-          </li>
-          <li>Autoriza con tu cuenta de Google/Alegra cuando se te pida.</li>
+          <li>Abre Claude (Desktop, web o Code) y busca &quot;Bitácora&quot; en tus conectores/herramientas disponibles.</li>
+          <li>La primera vez que lo uses, te va a pedir autorizar con tu cuenta de Google/Alegra.</li>
         </ol>
-        <p style={{ fontSize: 12, color: '#a0aec0', marginTop: 8 }}>
-          Si tu organización lo agrega como conector desde el panel de administración de Claude, queda disponible para todo el equipo sin que cada persona lo configure por su cuenta.
-        </p>
       </Section>
 
       <Section title="Qué puede hacer">
