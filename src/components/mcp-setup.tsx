@@ -94,6 +94,23 @@ export function McpSetup() {
           <li>Abre Claude (Desktop, web o Code) y busca &quot;Bitácora&quot; en tus conectores/herramientas disponibles.</li>
           <li>La primera vez que lo uses, te va a pedir autorizar con tu cuenta de Google/Alegra.</li>
         </ol>
+
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 12, marginTop: 16 }}>
+          {[
+            { src: '/mcp-setup/claude-1-conectores.png', caption: '1. Settings → Conectores → busca "Bitácora" → Conectar' },
+            { src: '/mcp-setup/claude-2-autorizar.png', caption: '2. Autoriza con tu cuenta de Google/Alegra' },
+            { src: '/mcp-setup/claude-3-conectado.png', caption: '3. Listo, ya quedó conectado' },
+          ].map((step) => (
+            <figure key={step.src} style={{ margin: 0 }}>
+              <img
+                src={step.src}
+                alt={step.caption}
+                style={{ width: '100%', borderRadius: 8, border: '1px solid #e2e8f0', display: 'block' }}
+              />
+              <figcaption style={{ fontSize: 12, color: '#718096', marginTop: 6, textAlign: 'center' }}>{step.caption}</figcaption>
+            </figure>
+          ))}
+        </div>
       </Section>
 
       <Section title="Qué puede hacer">
