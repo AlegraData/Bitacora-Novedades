@@ -95,19 +95,19 @@ export function McpSetup() {
           <li>La primera vez que lo uses, te va a pedir autorizar con tu cuenta de Google/Alegra.</li>
         </ol>
 
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 12, marginTop: 16 }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 24, marginTop: 20 }}>
           {[
             { src: '/mcp-setup/claude-1-conectores.png', caption: '1. Settings → Conectores → busca "Bitácora" → Conectar' },
             { src: '/mcp-setup/claude-2-autorizar.png', caption: '2. Autoriza con tu cuenta de Google/Alegra' },
             { src: '/mcp-setup/claude-3-conectado.png', caption: '3. Listo, ya quedó conectado' },
           ].map((step) => (
             <figure key={step.src} style={{ margin: 0 }}>
+              <figcaption style={{ fontSize: 13, color: '#4a5568', fontWeight: 500, marginBottom: 8 }}>{step.caption}</figcaption>
               <img
                 src={step.src}
                 alt={step.caption}
-                style={{ width: '100%', borderRadius: 8, border: '1px solid #e2e8f0', display: 'block' }}
+                style={{ maxWidth: 480, width: '100%', borderRadius: 8, border: '1px solid #e2e8f0', display: 'block' }}
               />
-              <figcaption style={{ fontSize: 12, color: '#718096', marginTop: 6, textAlign: 'center' }}>{step.caption}</figcaption>
             </figure>
           ))}
         </div>
