@@ -42,6 +42,21 @@ export async function POST(request: NextRequest) {
     return jsonRpcError(id, -32600, 'Invalid Request', 400)
   }
 
+  // Todo requiere un caller autenticado vía OAuth, incluido "initialize" —
+  // los clientes MCP (ej. OpenCode) usan la respuesta a la primera llamada
+  // para decidir si disparan el flujo OAuth; si initialize responde 200 sin
+  // auth, algunos clientes nunca intentan autenticarse.
+  const caller = await resolveCaller(request)
+  if (!caller) {
+    return NextResponse.json(
+      { jsonrpc: '2.0', id, error: { code: -32001, message: 'Unauthorized' } },
+      {
+        status: 401,
+        headers: { ...oauthCorsHeaders(), 'WWW-Authenticate': 'Bearer realm="Bitácora Novedades MCP"' },
+      }
+    )
+  }
+
   if (method === 'initialize') {
     return jsonRpcResult(id, {
       protocolVersion: PROTOCOL_VERSION,
@@ -52,15 +67,6 @@ export async function POST(request: NextRequest) {
 
   if (method === 'notifications/initialized') {
     return new NextResponse(null, { status: 202, headers: oauthCorsHeaders() })
-  }
-
-  // A partir de aquí, todo requiere un caller autenticado vía OAuth.
-  const caller = await resolveCaller(request)
-  if (!caller) {
-    return NextResponse.json(
-      { jsonrpc: '2.0', id, error: { code: -32001, message: 'Unauthorized' } },
-      { status: 401, headers: { ...oauthCorsHeaders(), 'WWW-Authenticate': 'Bearer' } }
-    )
   }
 
   if (method === 'tools/list') {

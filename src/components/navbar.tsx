@@ -106,6 +106,13 @@ export function Navbar({ userName, userEmail, userImage, userRole }: NavbarProps
       </div>
 
       <div style={{ display: 'flex', alignItems: 'center', gap: 12 }} ref={menuRef}>
+        <Link
+          href="/mcp"
+          style={{ ...btnStyle, textDecoration: 'none' }}
+        >
+          MCP
+        </Link>
+
         {userRole === 'ADMIN' && (
           <Link
             href="/admin"
