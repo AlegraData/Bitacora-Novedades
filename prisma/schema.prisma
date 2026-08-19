@@ -99,3 +99,45 @@ model View {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 }
+
+model OAuthClient {
+  id           String   @id @default(cuid())
+  clientId     String   @unique
+  name         String
+  redirectUris String[]
+  createdAt    DateTime @default(now())
+
+  @@index([clientId])
+}
+
+model OAuthCode {
+  id            String   @id @default(cuid())
+  code          String   @unique
+  userEmail     String
+  clientId      String
+  redirectUri   String
+  codeChallenge String
+  expiresAt     DateTime
+  createdAt     DateTime @default(now())
+
+  @@index([code])
+}
+
+model OAuthSession {
+  id               String    @id @default(cuid())
+  accessToken      String    @unique
+  refreshToken     String    @unique
+  userEmail        String
+  clientId         String
+  clientName       String?
+  expiresAt        DateTime
+  refreshExpiresAt DateTime
+  revokedAt        DateTime?
+  lastUsedAt       DateTime?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  @@index([accessToken])
+  @@index([refreshToken])
+  @@index([userEmail])
+}

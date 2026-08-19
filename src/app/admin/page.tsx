@@ -3,6 +3,7 @@ import { createClient } from '@/lib/supabase/server'
 import { getCurrentUserProfile, getAllUsers, updateUserRole } from '@/lib/actions/users'
 import { getFields, saveFieldPermission } from '@/lib/actions/fields'
 import { getAuditLogs } from '@/lib/actions/audit'
+import { getActiveMcpSessions, revokeMcpSession } from '@/lib/actions/mcp-sessions'
 import { Navbar } from '@/components/navbar'
 import { AdminPanel } from '@/components/admin-panel'
 
@@ -19,10 +20,11 @@ export default async function AdminPage() {
   const userProfile = await getCurrentUserProfile()
   if (!userProfile || userProfile.role !== 'ADMIN') redirect('/app')
 
-  const [fields, users, auditLogs] = await Promise.all([
+  const [fields, users, auditLogs, mcpSessions] = await Promise.all([
     getFields(),
     getAllUsers(),
     getAuditLogs(100),
+    getActiveMcpSessions(),
   ])
 
   return (
@@ -38,8 +40,10 @@ export default async function AdminPage() {
           fields={fields}
           users={users.map(u => ({ ...u, role: u.role as 'ADMIN' | 'MANAGER' | 'VIEWER', name: u.name ?? u.email, image: u.image ?? null, createdAt: u.createdAt.toISOString(), updatedAt: u.updatedAt.toISOString() }))}
           auditLogs={auditLogs}
+          mcpSessions={mcpSessions}
           onUpdateUserRole={updateUserRole}
           onSaveFieldPermission={saveFieldPermission}
+          onRevokeMcpSession={revokeMcpSession}
         />
       </div>
     </div>

@@ -2,6 +2,7 @@
 
 import { useState, useTransition } from 'react'
 import type { Field, AuditLog, Role } from '@/types'
+import type { McpSession } from '@/lib/actions/mcp-sessions'
 
 interface DBUser {
   id: string
@@ -17,16 +18,33 @@ interface AdminPanelProps {
   fields: Field[]
   users: DBUser[]
   auditLogs: AuditLog[]
+  mcpSessions: McpSession[]
   onUpdateUserRole: (userId: string, role: Role) => Promise<void>
   onSaveFieldPermission: (fieldId: string, role: Role, canEdit: boolean) => Promise<void>
+  onRevokeMcpSession: (sessionId: string) => Promise<void>
 }
 
-type Tab = 'users' | 'permissions' | 'audit'
+type Tab = 'users' | 'permissions' | 'audit' | 'mcp'
 
-export function AdminPanel({ fields, users: initialUsers, auditLogs, onUpdateUserRole, onSaveFieldPermission }: AdminPanelProps) {
+function mcpStatus(refreshExpiresAt: string): { label: string; bg: string; color: string } {
+  const msLeft = new Date(refreshExpiresAt).getTime() - Date.now()
+  if (msLeft <= 0) return { label: 'Expirada', bg: '#fed7d7', color: '#9b2c2c' }
+  if (msLeft < 24 * 60 * 60 * 1000) return { label: 'Expira pronto', bg: '#feebc8', color: '#9c4221' }
+  return { label: 'Activa', bg: '#c6f6d5', color: '#276749' }
+}
+
+export function AdminPanel({ fields, users: initialUsers, auditLogs, mcpSessions: initialMcpSessions, onUpdateUserRole, onSaveFieldPermission, onRevokeMcpSession }: AdminPanelProps) {
   const [tab, setTab] = useState<Tab>('users')
   const [users, setUsers] = useState<DBUser[]>(initialUsers)
+  const [mcpSessions, setMcpSessions] = useState<McpSession[]>(initialMcpSessions)
   const [isPending, startTransition] = useTransition()
+
+  function handleRevokeMcpSession(sessionId: string) {
+    startTransition(async () => {
+      await onRevokeMcpSession(sessionId)
+      setMcpSessions((prev) => prev.filter((s) => s.id !== sessionId))
+    })
+  }
 
   function handleRoleChange(userId: string, role: Role) {
     startTransition(async () => {
@@ -57,7 +75,7 @@ export function AdminPanel({ fields, users: initialUsers, auditLogs, onUpdateUse
 
       {/* Tabs */}
       <div style={{ display: 'flex', gap: 4, marginBottom: 24, background: '#fff', padding: 4, borderRadius: 10, boxShadow: '0 2px 8px rgba(0,0,0,0.06)', width: 'fit-content' }}>
-        {([['users', '👥 Usuarios'], ['permissions', '🔐 Permisos de campos'], ['audit', '📋 Auditoría']] as [Tab, string][]).map(([key, label]) => (
+        {([['users', '👥 Usuarios'], ['permissions', '🔐 Permisos de campos'], ['audit', '📋 Auditoría'], ['mcp', '🔌 Conexiones MCP']] as [Tab, string][]).map(([key, label]) => (
           <button
             key={key}
             onClick={() => setTab(key)}
@@ -235,6 +253,86 @@ export function AdminPanel({ fields, users: initialUsers, auditLogs, onUpdateUse
                 <tr>
                   <td colSpan={4} style={{ padding: '40px', textAlign: 'center', color: '#a0aec0' }}>
                     Sin registros de auditoría.
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {/* MCP connections tab */}
+      {tab === 'mcp' && (
+        <div style={{ background: '#fff', borderRadius: 12, boxShadow: '0 2px 8px rgba(0,0,0,0.06)', overflow: 'hidden' }}>
+          <div style={{ padding: '16px 20px', borderBottom: '1px solid #e2e8f0' }}>
+            <p style={{ fontSize: 13, color: '#718096' }}>
+              Sesiones OAuth activas de agentes de IA (Claude, OpenCode, etc.) conectados al MCP de Bitácora. Revocar cierra el acceso inmediatamente.
+            </p>
+          </div>
+          <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+            <thead>
+              <tr style={{ background: '#1e2a3a' }}>
+                {['Usuario', 'Cliente MCP', 'Estado', 'Último uso', 'Expira', ''].map((h) => (
+                  <th key={h} style={{ padding: '10px 16px', textAlign: 'left', fontSize: 12, fontWeight: 600, color: '#a0aec0' }}>{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {mcpSessions.map((s) => {
+                const status = mcpStatus(s.refreshExpiresAt)
+                return (
+                  <tr key={s.id} style={{ borderBottom: '1px solid #f0f4f8' }}>
+                    <td style={{ padding: '12px 16px' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                        <div style={{
+                          width: 32, height: 32, borderRadius: '50%',
+                          background: '#00C4A0', display: 'flex',
+                          alignItems: 'center', justifyContent: 'center',
+                          fontSize: 13, fontWeight: 600, color: '#fff', overflow: 'hidden',
+                        }}>
+                          {s.userImage
+                            ? <img src={s.userImage} alt={s.userName ?? s.userEmail} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                            : (s.userName ?? s.userEmail).charAt(0).toUpperCase()
+                          }
+                        </div>
+                        <div>
+                          <div style={{ fontSize: 14, fontWeight: 500, color: '#1a202c' }}>{s.userName ?? s.userEmail}</div>
+                          <div style={{ fontSize: 11, color: '#a0aec0' }}>{s.userEmail}</div>
+                        </div>
+                      </div>
+                    </td>
+                    <td style={{ padding: '12px 16px', fontSize: 13, color: '#1a202c' }}>{s.clientName ?? 'Cliente desconocido'}</td>
+                    <td style={{ padding: '12px 16px' }}>
+                      <span style={{ padding: '3px 8px', borderRadius: 4, fontSize: 11, fontWeight: 600, background: status.bg, color: status.color }}>
+                        {status.label}
+                      </span>
+                    </td>
+                    <td style={{ padding: '12px 16px', fontSize: 12, color: '#718096' }}>
+                      {s.lastUsedAt ? new Date(s.lastUsedAt).toLocaleString('es-CO') : 'Nunca'}
+                    </td>
+                    <td style={{ padding: '12px 16px', fontSize: 12, color: '#718096' }}>
+                      {new Date(s.refreshExpiresAt).toLocaleDateString('es-CO')}
+                    </td>
+                    <td style={{ padding: '12px 16px' }}>
+                      <button
+                        onClick={() => handleRevokeMcpSession(s.id)}
+                        disabled={isPending}
+                        style={{
+                          padding: '5px 12px', borderRadius: 6, border: '1px solid #fc8181',
+                          background: '#fff', color: '#c53030', fontSize: 12, fontWeight: 600,
+                          cursor: isPending ? 'default' : 'pointer', opacity: isPending ? 0.6 : 1,
+                        }}
+                      >
+                        Revocar
+                      </button>
+                    </td>
+                  </tr>
+                )
+              })}
+              {mcpSessions.length === 0 && (
+                <tr>
+                  <td colSpan={6} style={{ padding: '40px', textAlign: 'center', color: '#a0aec0' }}>
+                    No hay conexiones MCP activas.
                   </td>
                 </tr>
               )}

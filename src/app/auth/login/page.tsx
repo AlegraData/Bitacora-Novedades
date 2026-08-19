@@ -1,4 +1,5 @@
 import { createClient } from '@/lib/supabase/server'
+import { getPublicOrigin } from '@/lib/get-public-origin'
 import { redirect } from 'next/navigation'
 import { headers } from 'next/headers'
 import { LoginClient } from './login-client'
@@ -14,7 +15,7 @@ export default async function LoginPage({
     'use server'
     const supabase = await createClient()
     const headersList = await headers()
-    const origin = headersList.get('origin') ?? 'http://localhost:3000'
+    const origin = getPublicOrigin(headersList)
 
     const { data, error } = await supabase.auth.signInWithOAuth({
       provider: 'google',
