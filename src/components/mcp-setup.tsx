@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import Link from 'next/link'
 
 const MCP_URL = 'https://bitacora-novedades.alegra.com/api/mcp'
 
@@ -61,6 +62,20 @@ function Section({ title, children }: { title: string; children: React.ReactNode
 export function McpSetup() {
   return (
     <div style={{ maxWidth: 800, margin: '0 auto' }}>
+      <Link
+        href="/app"
+        style={{
+          display: 'inline-flex',
+          alignItems: 'center',
+          gap: 6,
+          fontSize: 13,
+          color: '#4a5568',
+          textDecoration: 'none',
+          marginBottom: 16,
+        }}
+      >
+        ← Volver a novedades
+      </Link>
       <div style={{ marginBottom: 24 }}>
         <h1 style={{ fontSize: 22, fontWeight: 700, color: '#1a202c' }}>Conectar al MCP de Bitácora</h1>
         <p style={{ fontSize: 14, color: '#718096', marginTop: 4 }}>
@@ -95,18 +110,18 @@ export function McpSetup() {
           <li>La primera vez que lo uses, te va a pedir autorizar con tu cuenta de Google/Alegra.</li>
         </ol>
 
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 24, marginTop: 20 }}>
+        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 24, marginTop: 20 }}>
           {[
             { src: '/mcp-setup/claude-1-conectores.png', caption: '1. Settings → Conectores → busca "Bitácora" → Conectar' },
             { src: '/mcp-setup/claude-2-autorizar.png', caption: '2. Autoriza con tu cuenta de Google/Alegra' },
             { src: '/mcp-setup/claude-3-conectado.png', caption: '3. Listo, ya quedó conectado' },
           ].map((step) => (
-            <figure key={step.src} style={{ margin: 0 }}>
+            <figure key={step.src} style={{ margin: 0, maxWidth: 480, width: '100%', textAlign: 'center' }}>
               <figcaption style={{ fontSize: 13, color: '#4a5568', fontWeight: 500, marginBottom: 8 }}>{step.caption}</figcaption>
               <img
                 src={step.src}
                 alt={step.caption}
-                style={{ maxWidth: 480, width: '100%', borderRadius: 8, border: '1px solid #e2e8f0', display: 'block' }}
+                style={{ maxWidth: '100%', borderRadius: 8, border: '1px solid #e2e8f0', display: 'block', margin: '0 auto' }}
               />
             </figure>
           ))}
