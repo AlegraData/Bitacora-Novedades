@@ -2,6 +2,9 @@ import { prisma } from '@/lib/prisma'
 import type { Prisma } from '@/generated/prisma'
 import { addAuditLog } from '@/lib/actions/audit'
 import { updateRecordEmbedding, searchSimilarRecords } from '@/lib/actions/ai'
+import { getFields } from '@/lib/actions/fields'
+import { buildHtmlEmail } from '@/lib/email-template'
+import type { BitacoraRecord, RecordData } from '@/types'
 import { loadFieldMap, mapRecordData, buildDataPatch } from './fields'
 import type { Caller } from './auth'
 
@@ -152,6 +155,16 @@ export const TOOLS = [
       properties: { id: { type: 'string', description: 'ID del registro a eliminar' } },
     },
     requiredRole: 'ADMIN' as const,
+  },
+  {
+    name: 'notify_pmkt',
+    description:
+      'Dispara el envío de comunicación PMKT para una novedad: notifica al canal de Google Chat y envía correo a los destinatarios de "Correos a comunicar". No se puede ejecutar dos veces sobre el mismo registro.',
+    inputSchema: {
+      type: 'object',
+      required: ['recordId'],
+      properties: { recordId: { type: 'string', description: 'ID de la novedad a comunicar' } },
+    },
   },
 ]
 
@@ -338,4 +351,91 @@ export async function handleDeleteRecord(args: Record<string, unknown>, caller: 
   })
 
   return { deleted: true, id }
+}
+
+export async function handleNotifyPmkt(args: Record<string, unknown>, caller: Caller): Promise<ToolResult> {
+  const recordId = String(args.recordId ?? '')
+  if (!recordId) return { error: 'El campo "recordId" es obligatorio.' }
+
+  const raw = await prisma.record.findUnique({ where: { id: recordId } })
+  if (!raw) return { error: `Registro "${recordId}" no encontrado.` }
+
+  const map = await loadFieldMap()
+  const rawData = raw.data as Record<string, unknown>
+  const logical = mapRecordData(rawData, map)
+
+  if (logical.necesitaComunicacionPMKT !== 'SI') {
+    return { error: 'Este registro no tiene activo el flag "Necesita comunicación de Product Marketing".' }
+  }
+
+  const already = await prisma.auditLog.findFirst({ where: { recordId, action: 'NOTIFIED_PMKT' } })
+  if (already) {
+    return { error: 'Este registro ya fue comunicado previamente.', notifiedAt: already.timestamp.toISOString() }
+  }
+
+  const correosField = map.get('correosAComunicar')
+  const recipientsRaw = correosField ? rawData[correosField.id] : undefined
+  const recipients = (Array.isArray(recipientsRaw) ? recipientsRaw : [])
+    .map(String)
+    .filter((e) => e.includes('@'))
+
+  if (recipients.length === 0) {
+    return { error: 'El registro no tiene destinatarios válidos en "Correos a comunicar".' }
+  }
+
+  const titulo = String(logical.titulo ?? 'Nueva novedad')
+  const subject = `📣 PMKT: ${titulo}`
+
+  let emailSent = false
+  const RESEND_API_KEY = process.env.RESEND_API_KEY
+  if (RESEND_API_KEY) {
+    const fields = await getFields()
+    const record: BitacoraRecord = {
+      id: raw.id,
+      data: raw.data as RecordData,
+      createdAt: raw.createdAt.toISOString(),
+      updatedAt: raw.updatedAt.toISOString(),
+      createdByEmail: raw.createdByEmail,
+      createdByName: raw.createdByName,
+    }
+    const html = buildHtmlEmail(subject, 'Nueva novedad lista para comunicar.', record, fields)
+    const FROM = process.env.RESEND_FROM_EMAIL ?? 'Bitácora <noreply@alegra.com>'
+    const { Resend } = await import('resend')
+    const resend = new Resend(RESEND_API_KEY)
+    await resend.emails.send({ from: FROM, to: recipients, subject, html })
+    emailSent = true
+  } else {
+    console.warn('[notify_pmkt] RESEND_API_KEY no configurado — se omite el envío de correo.')
+  }
+
+  let chatSent = false
+  const webhookUrl = process.env.PMKT_CHAT_WEBHOOK_URL
+  if (webhookUrl) {
+    const chatLines = [`📣 *${titulo}*`]
+    if (logical.breveDescripcion) chatLines.push(String(logical.breveDescripcion))
+    if (logical.urlBitacora) chatLines.push(String(logical.urlBitacora))
+
+    const res = await fetch(webhookUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ text: chatLines.join('\n') }),
+    })
+    chatSent = res.ok
+    if (!res.ok) {
+      console.error('[notify_pmkt] Error enviando a Google Chat:', res.status, await res.text().catch(() => ''))
+    }
+  } else {
+    console.warn('[notify_pmkt] PMKT_CHAT_WEBHOOK_URL no configurado — se omite el envío a Chat.')
+  }
+
+  await addAuditLog({
+    userId: caller.id,
+    userEmail: caller.email,
+    userName: caller.name ?? caller.email,
+    action: 'NOTIFIED_PMKT',
+    recordId,
+    details: { via: 'mcp', tool: 'notify_pmkt', emailSent, chatSent, recipients },
+  })
+
+  return { notified: true, emailSent, chatSent, recipients }
 }

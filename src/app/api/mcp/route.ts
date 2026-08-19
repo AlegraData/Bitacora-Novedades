@@ -9,6 +9,7 @@ import {
   handleCreateRecord,
   handleUpdateRecord,
   handleDeleteRecord,
+  handleNotifyPmkt,
 } from '@/lib/mcp/tools'
 
 const SERVER_INFO = { name: 'bitacora-novedades-mcp', version: '1.0.0' }
@@ -106,6 +107,9 @@ export async function POST(request: NextRequest) {
           break
         case 'delete_record':
           result = await handleDeleteRecord(toolArgs, caller)
+          break
+        case 'notify_pmkt':
+          result = await handleNotifyPmkt(toolArgs, caller)
           break
         default:
           return jsonRpcError(id, -32601, `Tool "${toolName}" not implemented`)

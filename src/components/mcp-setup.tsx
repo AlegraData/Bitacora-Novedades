@@ -98,7 +98,7 @@ export function McpSetup() {
 
       <Section title="Qué puede hacer">
         <p style={{ fontSize: 13, color: '#718096' }}>
-          Listar, buscar, crear y actualizar novedades. Eliminar registros está restringido a rol <strong>ADMIN</strong>. Todas las acciones de escritura quedan registradas en la auditoría de Bitácora.
+          Listar, buscar, crear y actualizar novedades, y disparar la comunicación de PMKT (correo + Google Chat). Eliminar registros está restringido a rol <strong>ADMIN</strong>. Todas las acciones de escritura quedan registradas en la auditoría de Bitácora.
         </p>
       </Section>
     </div>

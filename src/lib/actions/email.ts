@@ -2,6 +2,7 @@
 
 import { prisma } from '@/lib/prisma'
 import type { Field, BitacoraRecord } from '@/types'
+import { buildHtmlEmail } from '@/lib/email-template'
 import { addAuditLog } from './audit'
 import { getCurrentUserProfile } from './users'
 import { saveRecord } from './records'
@@ -19,41 +20,6 @@ function fillTemplate(
     result = result.replace(new RegExp(`\\{\\{${field.id}\\}\\}`, 'gi'), value)
   }
   return result
-}
-
-function buildHtmlEmail(subject: string, body: string, record: BitacoraRecord, fields: Field[]): string {
-  const rows = fields
-    .filter((f) => f.isVisible && f.type !== 'button')
-    .map((f) => {
-      const val = record.data[f.id]
-      if (val === undefined || val === null || val === '') return ''
-      return `<tr>
-        <td style="padding:6px 12px;color:#718096;font-size:13px;width:140px;vertical-align:top;">${f.name}</td>
-        <td style="padding:6px 12px;color:#2d3748;font-size:13px;">${String(val).replace(/\n/g, '<br>')}</td>
-      </tr>`
-    })
-    .join('')
-
-  return `<!DOCTYPE html><html><body style="margin:0;padding:0;background:#f5f7fa;">
-<table width="100%" cellpadding="0" cellspacing="0" style="background:#f5f7fa;padding:32px 0;">
-<tr><td align="center">
-<table width="600" cellpadding="0" cellspacing="0" style="background:#ffffff;border-radius:12px;overflow:hidden;box-shadow:0 2px 8px rgba(0,0,0,0.08);">
-<tr><td style="background:#1e2a3a;padding:20px 28px;">
-  <p style="margin:0;color:#00C4A0;font-size:11px;font-family:Arial,sans-serif;letter-spacing:1px;text-transform:uppercase;">Alegra · Bitácora</p>
-  <h2 style="margin:4px 0 0;color:#ffffff;font-family:Arial,sans-serif;font-size:18px;">Bitácora Novedades Product</h2>
-</td></tr>
-<tr><td style="padding:24px 28px 8px;border-bottom:1px solid #e2e8f0;">
-  <h3 style="margin:0;color:#1a202c;font-family:Arial,sans-serif;font-size:20px;">${subject}</h3>
-</td></tr>
-${body ? `<tr><td style="padding:16px 28px;color:#4a5568;font-family:Arial,sans-serif;font-size:14px;line-height:1.6;">${body.replace(/\n/g, '<br>')}</td></tr>` : ''}
-${rows ? `<tr><td style="padding:8px 28px 24px;">
-  <p style="margin:0 0 8px;color:#a0aec0;font-size:11px;font-family:Arial,sans-serif;text-transform:uppercase;letter-spacing:1px;">Detalles del registro</p>
-  <table width="100%" cellpadding="0" cellspacing="0" style="border:1px solid #e2e8f0;border-radius:8px;overflow:hidden;">${rows}</table>
-</td></tr>` : ''}
-<tr><td style="background:#f7fafc;padding:16px 28px;border-top:1px solid #e2e8f0;">
-  <p style="margin:0;color:#a0aec0;font-size:12px;font-family:Arial,sans-serif;">Enviado automáticamente desde Bitácora Novedades Product · Alegra</p>
-</td></tr>
-</table></td></tr></table></body></html>`
 }
 
 export async function triggerButtonEmail(
