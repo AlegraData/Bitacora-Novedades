@@ -4,6 +4,9 @@ import './globals.css'
 export const metadata: Metadata = {
   title: 'Bitácora Novedades Product | Alegra',
   description: 'Registro centralizado de novedades, pre-novedades y mejoras técnicas del equipo de Product.',
+  icons: {
+    icon: 'https://cdn1.alegra.com/images/favicon.ico',
+  },
 }
 
 export default function RootLayout({
