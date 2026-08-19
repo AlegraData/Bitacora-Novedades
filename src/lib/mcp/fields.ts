@@ -40,6 +40,7 @@ export interface FieldInfo {
   name: string
   type: string
   options: string[]
+  permissions: { role: string; canEdit: boolean }[]
 }
 
 export type FieldMap = Map<string, FieldInfo>
@@ -51,7 +52,7 @@ export async function loadFieldMap(): Promise<FieldMap> {
   if (cache && Date.now() - cache.at < CACHE_TTL_MS) return cache.map
 
   const fields = await prisma.field.findMany({
-    include: { options: { orderBy: { order: 'asc' } } },
+    include: { options: { orderBy: { order: 'asc' } }, permissions: true },
   })
 
   const map: FieldMap = new Map()
@@ -63,12 +64,24 @@ export async function loadFieldMap(): Promise<FieldMap> {
         name: field.name,
         type: field.type,
         options: field.options.map((o) => o.name),
+        permissions: field.permissions.map((p) => ({ role: p.role, canEdit: p.canEdit })),
       })
     }
   }
 
   cache = { at: Date.now(), map }
   return map
+}
+
+/**
+ * Mismo default que usa el panel de admin (admin-panel.tsx): si no hay un
+ * FieldPermission explícito para el rol, ADMIN y MANAGER pueden editar,
+ * VIEWER solo puede leer.
+ */
+export function canEditField(info: FieldInfo, role: string): boolean {
+  const perm = info.permissions.find((p) => p.role === role)
+  if (perm) return perm.canEdit
+  return role === 'ADMIN' || role === 'MANAGER'
 }
 
 export function mapRecordData(data: Record<string, unknown>, map: FieldMap): Record<string, unknown> {
@@ -87,7 +100,8 @@ export interface FieldValidationError {
 }
 
 export async function buildDataPatch(
-  input: Record<string, unknown>
+  input: Record<string, unknown>,
+  callerRole: string
 ): Promise<{ patch: Record<string, unknown>; errors: FieldValidationError[] }> {
   const map = await loadFieldMap()
   const patch: Record<string, unknown> = {}
@@ -104,6 +118,14 @@ export async function buildDataPatch(
     const info = map.get(logicalKey)
     if (!info) {
       errors.push({ field: logicalKey, message: `Campo "${logicalKey}" no está configurado en Bitácora.` })
+      continue
+    }
+
+    if (!canEditField(info, callerRole)) {
+      errors.push({
+        field: logicalKey,
+        message: `No tienes permiso para editar "${info.name}" con tu rol actual (${callerRole}).`,
+      })
       continue
     }
 

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { oauthCorsHeaders } from '@/lib/oauth/cors'
-import { resolveCaller } from '@/lib/mcp/auth'
+import { resolveCaller, type Caller } from '@/lib/mcp/auth'
+import { addAuditLog } from '@/lib/actions/audit'
 import {
   TOOLS,
   handleListRecords,
@@ -10,10 +11,39 @@ import {
   handleUpdateRecord,
   handleDeleteRecord,
   handleNotifyPmkt,
+  handleListAuditLog,
 } from '@/lib/mcp/tools'
 
 const SERVER_INFO = { name: 'bitacora-novedades-mcp', version: '1.0.0' }
 const PROTOCOL_VERSION = '2025-06-18'
+
+const READ_ACTIONS: Record<string, string> = {
+  list_records: 'MCP_LISTED_RECORDS',
+  get_record: 'MCP_VIEWED_RECORD',
+  search_records_semantic: 'MCP_SEARCHED_RECORDS',
+  list_audit_log: 'MCP_VIEWED_AUDIT_LOG',
+}
+
+async function logMcpRead(toolName: string, toolArgs: Record<string, unknown>, caller: Caller) {
+  const action = READ_ACTIONS[toolName]
+  if (!action) return
+
+  const recordId =
+    typeof toolArgs.id === 'string' ? toolArgs.id : typeof toolArgs.recordId === 'string' ? toolArgs.recordId : null
+
+  try {
+    await addAuditLog({
+      userId: caller.id,
+      userEmail: caller.email,
+      userName: caller.name ?? caller.email,
+      action,
+      recordId,
+      details: { via: 'mcp', tool: toolName, args: toolArgs },
+    })
+  } catch (error) {
+    console.error('Error registrando lectura de MCP en auditoría:', error)
+  }
+}
 
 export async function OPTIONS() {
   return new NextResponse(null, { status: 204, headers: oauthCorsHeaders() })
@@ -111,9 +141,15 @@ export async function POST(request: NextRequest) {
         case 'notify_pmkt':
           result = await handleNotifyPmkt(toolArgs, caller)
           break
+        case 'list_audit_log':
+          result = await handleListAuditLog(toolArgs)
+          break
         default:
           return jsonRpcError(id, -32601, `Tool "${toolName}" not implemented`)
       }
+
+      await logMcpRead(toolName, toolArgs, caller)
+
       return jsonRpcResult(id, toolTextResult(result))
     } catch (error) {
       console.error(`Error ejecutando tool "${toolName}":`, error)

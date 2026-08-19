@@ -157,6 +157,21 @@ export const TOOLS = [
     requiredRole: 'ADMIN' as const,
   },
   {
+    name: 'list_audit_log',
+    description:
+      'Lista el historial de cambios sobre registros o acciones de usuarios, incluyendo envíos de comunicación PMKT.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        recordId: { type: 'string', description: 'Filtrar por registro específico' },
+        userId: { type: 'string', description: 'Filtrar por usuario que hizo el cambio' },
+        desde: { type: 'string', description: 'Inicio del rango de fecha (YYYY-MM-DD)' },
+        hasta: { type: 'string', description: 'Fin del rango de fecha (YYYY-MM-DD)' },
+        limit: { type: 'number', description: 'Default: 50' },
+      },
+    },
+  },
+  {
     name: 'notify_pmkt',
     description:
       'Dispara el envío de comunicación PMKT para una novedad: notifica al canal de Google Chat y envía correo a los destinatarios de "Correos a comunicar". No se puede ejecutar dos veces sobre el mismo registro.',
@@ -268,7 +283,7 @@ export async function handleCreateRecord(args: Record<string, unknown>, caller: 
     }
   }
 
-  const { patch, errors } = await buildDataPatch(args)
+  const { patch, errors } = await buildDataPatch(args, caller.role)
   if (errors.length > 0) return { error: 'Validación fallida', details: errors }
 
   const record = await prisma.record.create({
@@ -305,7 +320,7 @@ export async function handleUpdateRecord(args: Record<string, unknown>, caller: 
 
   const { id: _omit, ...rest } = args
   void _omit
-  const { patch, errors } = await buildDataPatch(rest)
+  const { patch, errors } = await buildDataPatch(rest, caller.role)
   if (errors.length > 0) return { error: 'Validación fallida', details: errors }
 
   const mergedData = { ...(existing.data as Record<string, unknown>), ...patch }
@@ -438,4 +453,37 @@ export async function handleNotifyPmkt(args: Record<string, unknown>, caller: Ca
   })
 
   return { notified: true, emailSent, chatSent, recipients }
+}
+
+export async function handleListAuditLog(args: Record<string, unknown>): Promise<ToolResult> {
+  const where: Prisma.AuditLogWhereInput = {}
+
+  if (typeof args.recordId === 'string') where.recordId = args.recordId
+  if (typeof args.userId === 'string') where.userId = args.userId
+
+  if (typeof args.desde === 'string' || typeof args.hasta === 'string') {
+    where.timestamp = {}
+    if (typeof args.desde === 'string') where.timestamp.gte = new Date(args.desde)
+    if (typeof args.hasta === 'string') {
+      const end = new Date(args.hasta)
+      end.setUTCHours(23, 59, 59, 999)
+      where.timestamp.lte = end
+    }
+  }
+
+  const limit = Math.min(Number(args.limit) || 50, 200)
+  const logs = await prisma.auditLog.findMany({ where, orderBy: { timestamp: 'desc' }, take: limit })
+
+  return {
+    total: logs.length,
+    logs: logs.map((l) => ({
+      id: l.id,
+      timestamp: l.timestamp.toISOString(),
+      userEmail: l.userEmail,
+      userName: l.userName,
+      action: l.action,
+      recordId: l.recordId,
+      details: l.details,
+    })),
+  }
 }
