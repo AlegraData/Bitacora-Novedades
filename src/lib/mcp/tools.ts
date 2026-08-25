@@ -283,7 +283,7 @@ export async function handleCreateRecord(args: Record<string, unknown>, caller: 
     }
   }
 
-  const { patch, errors } = await buildDataPatch(args, caller.role)
+  const { patch, errors } = await buildDataPatch(args)
   if (errors.length > 0) return { error: 'Validación fallida', details: errors }
 
   const record = await prisma.record.create({
@@ -320,7 +320,7 @@ export async function handleUpdateRecord(args: Record<string, unknown>, caller: 
 
   const { id: _omit, ...rest } = args
   void _omit
-  const { patch, errors } = await buildDataPatch(rest, caller.role)
+  const { patch, errors } = await buildDataPatch(rest)
   if (errors.length > 0) return { error: 'Validación fallida', details: errors }
 
   const mergedData = { ...(existing.data as Record<string, unknown>), ...patch }
