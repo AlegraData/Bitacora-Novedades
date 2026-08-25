@@ -109,7 +109,7 @@ export const TOOLS = [
   },
   {
     name: 'update_record',
-    description: 'Actualiza campos específicos de un registro existente. Solo se envían los campos que cambian.',
+    description: 'Actualiza campos específicos de un registro existente. Solo se envían los campos que cambian. Solo puede editarlo quien lo creó originalmente o un usuario con rol ADMIN.',
     inputSchema: {
       type: 'object',
       required: ['id'],
@@ -317,6 +317,10 @@ export async function handleUpdateRecord(args: Record<string, unknown>, caller: 
 
   const existing = await prisma.record.findUnique({ where: { id } })
   if (!existing) return { error: `Registro "${id}" no encontrado.` }
+
+  if (existing.createdByEmail !== caller.email && caller.role !== 'ADMIN') {
+    return { error: `No puedes editar este registro — fue creado por ${existing.createdByEmail}. Solo su autor o un ADMIN pueden modificarlo.` }
+  }
 
   const { id: _omit, ...rest } = args
   void _omit
