@@ -206,12 +206,19 @@ export const TOOLS = [
     name: 'notify_pmkt',
     description:
       'Dispara el envío de comunicación PMKT para una novedad: notifica al canal de Google Chat y envía correo a los destinatarios de "Correos a comunicar". ' +
-      'Antes de enviar valida que título, breve descripción, fecha de lanzamiento y al menos un destinatario estén completos; si falta alguno, devuelve la lista exacta de campos faltantes sin enviar nada. ' +
+      'Antes de enviar valida que título, breve descripción, fecha de lanzamiento, fecha real de producción, responsables y al menos un destinatario con formato de correo válido estén completos; si falta alguno, devuelve la lista exacta de campos faltantes sin enviar nada. ' +
+      'Flujo en dos pasos: llamar SIN "confirm" primero devuelve un preview (asunto, destinatarios, campos que se incluirán) sin enviar nada; hay que mostrárselo al usuario y volver a llamar con "confirm: true" para disparar el envío real. ' +
       'Solo queda marcado como comunicado (y bloqueado para reenvío) si el correo realmente se envió.',
     inputSchema: {
       type: 'object',
       required: ['recordId'],
-      properties: { recordId: { type: 'string', description: 'ID de la novedad a comunicar' } },
+      properties: {
+        recordId: { type: 'string', description: 'ID de la novedad a comunicar' },
+        confirm: {
+          type: 'boolean',
+          description: 'Debe ser true para disparar el envío real. Sin este parámetro (o en false) solo se valida y se devuelve un preview, sin enviar nada.',
+        },
+      },
     },
   },
 ]
@@ -440,29 +447,37 @@ export async function handleNotifyPmkt(args: Record<string, unknown>, caller: Ca
     return { error: 'Este registro ya fue comunicado previamente.', notifiedAt: already.timestamp.toISOString() }
   }
 
+  // Validar formato real de correo (antes solo se pedía que contuviera "@", lo
+  // que dejaba pasar basura como "a@" o "@@" hacia Resend).
+  const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
   const correosField = map.get('correosAComunicar')
   const recipientsRaw = correosField ? rawData[correosField.id] : undefined
   const recipients = (Array.isArray(recipientsRaw) ? recipientsRaw : [])
     .map(String)
-    .filter((e) => e.includes('@'))
+    .filter((e) => EMAIL_RE.test(e))
 
   // Validación explícita de campos obligatorios ANTES de intentar enviar nada.
-  // Antes solo se validaban los destinatarios; si faltaba título/descripción/fecha
-  // el correo salía igual con contenido incompleto (o, si RESEND_API_KEY no estaba
-  // configurado, el tool igual devolvía "notified: true" sin explicar por qué no
-  // llegó nada). Ahora se listan explícitamente los campos que faltan.
+  // Antes solo se validaban los destinatarios; si faltaba título/descripción/fecha/
+  // responsables el correo salía igual con contenido incompleto (o, si
+  // RESEND_API_KEY no estaba configurado, el tool igual devolvía "notified: true"
+  // sin explicar por qué no llegó nada). Ahora se listan explícitamente los
+  // campos que faltan, incluyendo los que agregó el fix de TMDIAPD-45
+  // (fechaProduccion, responsables) que también deben viajar en la comunicación.
   const REQUIRED_NOTIFY_FIELDS: Array<{ key: string; label: string }> = [
     { key: 'titulo', label: 'Título' },
     { key: 'breveDescripcion', label: 'Breve descripción' },
     { key: 'fechaLanzamiento', label: 'Fecha de lanzamiento' },
+    { key: 'fechaProduccion', label: 'Fecha real de producción' },
+    { key: 'responsables', label: 'Responsables' },
   ]
   const missingFields = REQUIRED_NOTIFY_FIELDS
     .filter(({ key }) => {
       const v = logical[key]
+      if (Array.isArray(v)) return v.length === 0
       return v === undefined || v === null || String(v).trim() === ''
     })
     .map(({ label }) => label)
-  if (recipients.length === 0) missingFields.push('Correos a comunicar (mínimo un destinatario válido)')
+  if (recipients.length === 0) missingFields.push('Correos a comunicar (mínimo un destinatario con formato de correo válido)')
 
   if (missingFields.length > 0) {
     return {
@@ -473,6 +488,21 @@ export async function handleNotifyPmkt(args: Record<string, unknown>, caller: Ca
 
   const titulo = String(logical.titulo ?? 'Nueva novedad')
   const subject = `📣 PMKT: ${titulo}`
+
+  // Segunda capa de seguridad: con todos los campos obligatorios completos,
+  // se muestra un preview exacto de asunto/destinatarios/contenido y se exige
+  // "confirm: true" en una segunda llamada para disparar el envío real. Así el
+  // usuario ve explícitamente qué se va a comunicar antes de que salga nada
+  // (y no se puede enviar "sin querer" en la misma llamada que valida).
+  if (args.confirm !== true) {
+    return {
+      preview: true,
+      subject,
+      recipients,
+      camposIncluidos: logical,
+      instrucciones: 'Revisa que el asunto, destinatarios y campos sean correctos. Para enviar de verdad, vuelve a llamar a notify_pmkt con el mismo recordId y confirm: true.',
+    }
+  }
 
   let emailSent = false
   let emailError: string | undefined
