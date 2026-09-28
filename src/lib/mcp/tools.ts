@@ -2,9 +2,8 @@ import { prisma } from '@/lib/prisma'
 import type { Prisma } from '@/generated/prisma'
 import { addAuditLog } from '@/lib/actions/audit'
 import { updateRecordEmbedding, searchSimilarRecords } from '@/lib/actions/ai'
-import { getFields } from '@/lib/actions/fields'
-import { buildHtmlEmail } from '@/lib/email-template'
-import type { BitacoraRecord, RecordData } from '@/types'
+import { postRecordToWebhook } from '@/lib/actions/webhook'
+import type { ButtonConfig } from '@/types'
 import { loadFieldMap, mapRecordData, buildDataPatch } from './fields'
 import type { Caller } from './auth'
 
@@ -504,33 +503,35 @@ export async function handleNotifyPmkt(args: Record<string, unknown>, caller: Ca
     }
   }
 
+  // El envío real no usa un proveedor de correo propio (no hay Resend ni
+  // similar) — reutiliza el mismo webhook de Apps Script que ya usa el botón
+  // "Enviar email" de la app web (probado en producción: ver WEBHOOK_TRIGGERED
+  // en el audit log). Es el mismo campo tipo "button" con config.action ===
+  // "webhook", así que no hay que duplicar su configuración en ningún lado.
   let emailSent = false
   let emailError: string | undefined
-  const RESEND_API_KEY = process.env.RESEND_API_KEY
-  if (RESEND_API_KEY) {
-    try {
-      const fields = await getFields()
-      const record: BitacoraRecord = {
-        id: raw.id,
-        data: raw.data as RecordData,
-        createdAt: raw.createdAt.toISOString(),
-        updatedAt: raw.updatedAt.toISOString(),
-        createdByEmail: raw.createdByEmail,
-        createdByName: raw.createdByName,
-      }
-      const html = buildHtmlEmail(subject, 'Nueva novedad lista para comunicar.', record, fields)
-      const FROM = process.env.RESEND_FROM_EMAIL ?? 'Bitácora <noreply@alegra.com>'
-      const { Resend } = await import('resend')
-      const resend = new Resend(RESEND_API_KEY)
-      await resend.emails.send({ from: FROM, to: recipients, subject, html })
-      emailSent = true
-    } catch (e) {
-      emailError = e instanceof Error ? e.message : String(e)
-      console.error('[notify_pmkt] Error enviando correo vía Resend:', e)
+  try {
+    const buttonField = await prisma.field.findFirst({ where: { type: 'button' } })
+    const webhookConfig = buttonField?.config as ButtonConfig | null
+    if (!webhookConfig || webhookConfig.action !== 'webhook' || !webhookConfig.webhookUrl) {
+      throw new Error('No se encontró un campo tipo botón con acción "webhook" configurado (el mismo que usa "Enviar email" en la app web).')
     }
-  } else {
-    emailError = 'RESEND_API_KEY no está configurado en el servidor.'
-    console.warn('[notify_pmkt] RESEND_API_KEY no configurado — se omite el envío de correo.')
+
+    const allFields = await prisma.field.findMany({ orderBy: { order: 'asc' } })
+    const fieldNameMap = new Map(allFields.map((f) => [f.id, f.name]))
+
+    await postRecordToWebhook({
+      webhookUrl: webhookConfig.webhookUrl,
+      recordId,
+      recordData: rawData,
+      fieldMap: fieldNameMap,
+      config: webhookConfig,
+      triggeredBy: caller.email,
+    })
+    emailSent = true
+  } catch (e) {
+    emailError = e instanceof Error ? e.message : String(e)
+    console.error('[notify_pmkt] Error enviando vía webhook de Apps Script:', e)
   }
 
   let chatSent = false

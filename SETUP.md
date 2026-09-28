@@ -5,7 +5,6 @@
 - Una cuenta en [Supabase](https://supabase.com) (gratis)
 - Una cuenta en [Vercel](https://vercel.com) (opcional, para despliegue)
 - Una API key de [OpenAI](https://platform.openai.com) (opcional, para el chatbot)
-- Una API key de [Resend](https://resend.com) (opcional, para emails)
 
 ---
 
@@ -45,9 +44,9 @@ NEXT_PUBLIC_SUPABASE_ANON_KEY=eyJ...
 DATABASE_URL=postgresql://postgres.xxxx:password@aws-0-us-east-1.pooler.supabase.com:6543/postgres?pgbouncer=true
 DIRECT_URL=postgresql://postgres.xxxx:password@aws-0-us-east-1.pooler.supabase.com:5432/postgres
 OPENAI_API_KEY=sk-...   # Opcional
-RESEND_API_KEY=re_...   # Opcional
-RESEND_FROM_EMAIL=Bitácora <noreply@tudominio.com>
 ```
+
+El envío de correo/notificación PMKT no usa un proveedor de email propio: reutiliza el webhook de Apps Script configurado en el campo "Enviar email" (Field.config.webhookUrl), el mismo que usa el botón de la app web.
 
 También actualizar `prisma.config.ts` para que use las variables correctas.
 

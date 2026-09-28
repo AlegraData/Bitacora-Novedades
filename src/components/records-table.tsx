@@ -6,7 +6,6 @@ import { saveRecord, deleteRecord } from '@/lib/actions/records'
 import { saveField, deleteField, reorderFields } from '@/lib/actions/fields'
 import { saveTag, deleteTag } from '@/lib/actions/tags'
 import { triggerButtonWebhook } from '@/lib/actions/webhook'
-import { triggerButtonEmail } from '@/lib/actions/email'
 import { saveView, deleteView } from '@/lib/actions/views'
 import { RecordEditor } from './record-editor'
 import { RecordDetail } from './record-detail'
@@ -650,13 +649,8 @@ export function RecordsTable({
     }
     startTransition(async () => {
       try {
-        const config = field.config as { action: string } | null
-        if (config?.action === 'send_email') {
-          await triggerButtonEmail(record.id, field.id)
-        } else {
-          await triggerButtonWebhook(record.id, field.id)
-        }
-        
+        await triggerButtonWebhook(record.id, field.id)
+
         const now = new Date().toISOString()
         setRecords((prev) => prev.map((r) =>
           r.id === record.id
@@ -667,7 +661,6 @@ export function RecordsTable({
         alert('Error: ' + (e instanceof Error ? e.message : String(e)))
       }
     })
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [fields_])
 
   const toggleAll = () => {

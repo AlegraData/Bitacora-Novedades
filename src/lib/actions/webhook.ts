@@ -4,7 +4,62 @@ import { prisma } from '@/lib/prisma'
 import { getCurrentUserProfile } from './users'
 import { saveRecord } from './records'
 import { addAuditLog } from './audit'
-import type { BitacoraRecord } from '@/types'
+import type { BitacoraRecord, ButtonConfig } from '@/types'
+
+const EMPTY_VALUES = new Set(['n/a', 'na', 'no aplica', 'ninguno'])
+
+// Construye el payload con nombres de campo como claves. Filtra: campos
+// internos (__blocks__), IDs no seleccionados en el botón, valores vacíos y "N/A".
+function buildNamedData(
+  recordData: Record<string, unknown>,
+  fieldMap: Map<string, string>,
+  config: ButtonConfig
+): Record<string, unknown> {
+  const sendAll = config.sendAllFields !== false
+  const allowedIds = sendAll ? null : new Set(config.selectedFieldIds ?? [])
+
+  const namedData: Record<string, unknown> = {}
+  for (const [fieldId, value] of Object.entries(recordData)) {
+    if (fieldId.startsWith('__')) continue
+    if (allowedIds && !allowedIds.has(fieldId)) continue
+    if (value === null || value === undefined || value === '') continue
+    if (Array.isArray(value) && value.length === 0) continue
+    if (typeof value === 'string' && EMPTY_VALUES.has(value.toLowerCase().trim())) continue
+    const fieldName = fieldMap.get(fieldId) ?? fieldId
+    namedData[fieldName] = value
+  }
+  return namedData
+}
+
+// POST al endpoint (Apps Script) que arma y envía el correo/tarjeta de chat.
+// Único punto de contacto con ese endpoint — lo usan tanto el botón "Enviar
+// email" de la app web como notify_pmkt del MCP, para no duplicar la lógica
+// del único mecanismo de envío que existe (no hay Resend ni otro proveedor).
+export async function postRecordToWebhook(params: {
+  webhookUrl: string
+  recordId: string
+  recordData: Record<string, unknown>
+  fieldMap: Map<string, string>
+  config: ButtonConfig
+  triggeredBy: string
+}): Promise<void> {
+  const namedData = buildNamedData(params.recordData, params.fieldMap, params.config)
+
+  const response = await fetch(params.webhookUrl, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      recordId: params.recordId,
+      data: namedData,
+      triggeredBy: params.triggeredBy,
+      triggeredAt: new Date().toISOString(),
+    }),
+  })
+
+  if (!response.ok) {
+    throw new Error(`El endpoint respondió con error ${response.status}: ${response.statusText}`)
+  }
+}
 
 export async function triggerButtonWebhook(
   recordId: string,
@@ -21,14 +76,7 @@ export async function triggerButtonWebhook(
   if (!rawRecord) throw new Error('Registro no encontrado')
   if (!rawField || rawField.type !== 'button') throw new Error('Campo botón no encontrado')
 
-  const config = rawField.config as {
-    action: string
-    webhookUrl: string
-    logFieldId?: string
-    sendAllFields?: boolean
-    selectedFieldIds?: string[]
-  } | null
-
+  const config = rawField.config as ButtonConfig | null
   if (!config || config.action !== 'webhook') throw new Error('El botón no tiene acción "webhook".')
   if (!config.webhookUrl) throw new Error('No hay URL de endpoint configurada.')
 
@@ -41,43 +89,17 @@ export async function triggerButtonWebhook(
     createdByName: rawRecord.createdByName,
   }
 
-  // Obtener todos los campos para mapear id → nombre
   const allFields = await prisma.field.findMany({ orderBy: { order: 'asc' } })
   const fieldMap = new Map(allFields.map((f) => [f.id, f.name]))
 
-  // Determinar qué campo IDs incluir según config del botón
-  const sendAll = config.sendAllFields !== false
-  const allowedIds = sendAll ? null : new Set(config.selectedFieldIds ?? [])
-
-  // Construir payload con nombres de campo como claves
-  // Filtra: campos internos (__blocks__), IDs no seleccionados, valores vacíos y "N/A"
-  const EMPTY_VALUES = new Set(['n/a', 'na', 'no aplica', 'ninguno'])
-  const namedData: Record<string, unknown> = {}
-  for (const [fieldId, value] of Object.entries(record.data)) {
-    if (fieldId.startsWith('__')) continue
-    if (allowedIds && !allowedIds.has(fieldId)) continue
-    if (value === null || value === undefined || value === '') continue
-    if (Array.isArray(value) && value.length === 0) continue
-    if (typeof value === 'string' && EMPTY_VALUES.has(value.toLowerCase().trim())) continue
-    const fieldName = fieldMap.get(fieldId) ?? fieldId
-    namedData[fieldName] = value
-  }
-
-  // POST al endpoint con datos legibles
-  const response = await fetch(config.webhookUrl, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      recordId: record.id,
-      data: namedData,
-      triggeredBy: user.email,
-      triggeredAt: new Date().toISOString(),
-    }),
+  await postRecordToWebhook({
+    webhookUrl: config.webhookUrl,
+    recordId,
+    recordData: record.data,
+    fieldMap,
+    config,
+    triggeredBy: user.email,
   })
-
-  if (!response.ok) {
-    throw new Error(`El endpoint respondió con error ${response.status}: ${response.statusText}`)
-  }
 
   // Guardar timestamp de ejecución en el campo del botón
   const now = new Date().toISOString()

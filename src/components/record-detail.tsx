@@ -5,7 +5,6 @@ import type { Field, BitacoraRecord, Tag, Role, RecordData, Block } from '@/type
 import { PersonPicker } from './person-picker'
 import { MultiSelectDropdown } from './multi-select-dropdown'
 import { triggerButtonWebhook } from '@/lib/actions/webhook'
-import { triggerButtonEmail } from '@/lib/actions/email'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 
@@ -108,13 +107,8 @@ export function RecordDetail({ record, fields, tags, userRole, onSave, onClose, 
   const handleTriggerButton = useCallback(async (field: Field) => {
     startTransition(async () => {
       try {
-        const config = field.config as { action: string } | null
-        if (config?.action === 'send_email') {
-          await triggerButtonEmail(record.id, field.id)
-        } else {
-          await triggerButtonWebhook(record.id, field.id)
-        }
-        
+        await triggerButtonWebhook(record.id, field.id)
+
         const now = new Date().toISOString()
         const newData = { ...formData, [field.id]: now }
         setFormData(newData)

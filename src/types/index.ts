@@ -13,11 +13,11 @@ export type FieldType =
   | 'checkbox'
 
 export interface ButtonConfig {
-  action: 'send_email'
-  targetFieldId: string  // field ID that contains the recipient email(s)
-  emailSubject: string   // supports {{fieldName}} placeholders
-  emailBody: string      // supports {{fieldName}} placeholders
-  logFieldId?: string    // optional field to log send history
+  action: 'webhook'
+  webhookUrl: string       // endpoint que recibe el POST (ej. Apps Script) y envía el correo/notificación
+  logFieldId?: string      // optional field to log send history
+  sendAllFields?: boolean  // default true; si es false, usa selectedFieldIds
+  selectedFieldIds?: string[]
 }
 
 export interface PersonConfig {
