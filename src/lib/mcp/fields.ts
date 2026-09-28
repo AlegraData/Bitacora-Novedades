@@ -10,6 +10,7 @@ export const LOGICAL_FIELD_NAMES: Record<string, string> = {
   titulo: 'Título',
   fechaLanzamiento: 'Fecha de lanzamiento',
   fechaFinEarlyAdopters: 'Fecha Fin Early Adopters',
+  fechaProduccion: 'Fecha real de producción',
   elaborado: 'Elaborado',
   responsables: 'Responsables',
   version: 'Versión',

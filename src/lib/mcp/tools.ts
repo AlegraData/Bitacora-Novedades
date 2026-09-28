@@ -79,18 +79,26 @@ export const TOOLS = [
       properties: {
         tipo: { type: 'string', description: 'Tipo de novedad' },
         titulo: { type: 'string', description: 'Título de la novedad' },
-        fechaLanzamiento: { type: 'string', description: 'Fecha de lanzamiento (YYYY-MM-DD)' },
+        fechaLanzamiento: { type: 'string', description: 'Fecha de lanzamiento planeada (YYYY-MM-DD)' },
         elaborado: { type: 'string', description: 'Email del autor' },
         fechaFinEarlyAdopters: { type: 'string', description: 'Fin de early adopters (YYYY-MM-DD)' },
+        fechaProduccion: {
+          type: 'string',
+          description: 'Fecha real en la que la novedad salió a producción (YYYY-MM-DD). Distinta de "fechaLanzamiento", que es la fecha planeada.',
+        },
         responsables: { type: 'array', items: { type: 'string' }, description: 'Emails de responsables' },
         version: { type: 'array', items: { type: 'string' }, description: 'Versiones relacionadas' },
-        breveDescripcion: { type: 'string', description: 'Descripción corta' },
+        breveDescripcion: {
+          type: 'string',
+          description:
+            'Resumen en LENGUAJE DE NEGOCIO para stakeholders no técnicos: qué cambia para el usuario y por qué importa. Evita jerga técnica (microservicio, endpoint, refactor, query, backend, API, etc).',
+        },
         producto: { type: 'array', items: { type: 'string' }, description: 'Productos impactados' },
         sh: { type: 'string', description: 'SH asociado' },
         documentacionOnePager: { type: 'string', description: 'Link al one pager' },
         proyectoLinear: { type: 'string', description: 'Link o ID del proyecto en Linear' },
         video: { type: 'string', description: 'Link al video' },
-        prototipo: { type: 'string', description: 'Link al prototipo' },
+        prototipo: { type: 'string', description: 'Link de Figma / prototipo de diseño' },
         ia: { type: 'string', description: 'Uso de IA' },
         informacionBoard: { type: 'string', description: 'Estado en board' },
         correosAComunicar: { type: 'array', items: { type: 'string' }, description: 'Correos para notificar' },
@@ -109,7 +117,9 @@ export const TOOLS = [
   },
   {
     name: 'update_record',
-    description: 'Actualiza campos específicos de un registro existente. Solo se envían los campos que cambian. Solo puede editarlo quien lo creó originalmente o un usuario con rol ADMIN.',
+    description:
+      'Actualiza campos específicos de un registro existente. Solo se envían los campos que cambian. Solo puede editarlo quien lo creó originalmente o un usuario con rol ADMIN. ' +
+      'Los campos de lista (responsables, producto, version, correosAComunicar) se COMBINAN con los valores existentes por defecto — enviar un responsable nuevo lo agrega a la lista, no la reemplaza. Usa "replaceArrays: true" para reemplazar la lista completa (necesario para quitar a alguien).',
     inputSchema: {
       type: 'object',
       required: ['id'],
@@ -119,19 +129,35 @@ export const TOOLS = [
         titulo: { type: 'string' },
         fechaLanzamiento: { type: 'string' },
         fechaFinEarlyAdopters: { type: 'string' },
+        fechaProduccion: {
+          type: 'string',
+          description: 'Fecha real en la que la novedad salió a producción (YYYY-MM-DD). Distinta de "fechaLanzamiento", que es la fecha planeada.',
+        },
         elaborado: { type: 'string' },
-        responsables: { type: 'array', items: { type: 'string' } },
+        responsables: {
+          type: 'array',
+          items: { type: 'string' },
+          description: 'Emails de responsables. Por defecto se agregan a los ya existentes (ver "replaceArrays").',
+        },
         version: { type: 'array', items: { type: 'string' } },
-        breveDescripcion: { type: 'string' },
+        breveDescripcion: {
+          type: 'string',
+          description:
+            'Resumen en LENGUAJE DE NEGOCIO para stakeholders no técnicos: qué cambia para el usuario y por qué importa. Evita jerga técnica (microservicio, endpoint, refactor, query, backend, API, etc).',
+        },
         producto: { type: 'array', items: { type: 'string' } },
         sh: { type: 'string' },
         documentacionOnePager: { type: 'string' },
         proyectoLinear: { type: 'string' },
         video: { type: 'string' },
-        prototipo: { type: 'string' },
+        prototipo: { type: 'string', description: 'Link de Figma / prototipo de diseño' },
         ia: { type: 'string' },
         informacionBoard: { type: 'string' },
-        correosAComunicar: { type: 'array', items: { type: 'string' } },
+        correosAComunicar: {
+          type: 'array',
+          items: { type: 'string' },
+          description: 'Correos para notificar. Por defecto se agregan a los ya existentes (ver "replaceArrays").',
+        },
         necesitaComunicacionPMKT: { type: 'string' },
         usuarioImpactado: { type: 'string' },
         taxonomiaFeature: { type: 'string' },
@@ -143,6 +169,11 @@ export const TOOLS = [
         urlBitacora: { type: 'string' },
         status: { type: 'string' },
         contenido: { description: 'Cuerpo extenso / rich text' },
+        replaceArrays: {
+          type: 'boolean',
+          description:
+            'Si es true, los campos de lista enviados en esta llamada (responsables, producto, version, correosAComunicar) reemplazan por completo la lista existente en vez de agregarse a ella. Default: false (agrega/combina).',
+        },
       },
     },
   },
@@ -174,7 +205,9 @@ export const TOOLS = [
   {
     name: 'notify_pmkt',
     description:
-      'Dispara el envío de comunicación PMKT para una novedad: notifica al canal de Google Chat y envía correo a los destinatarios de "Correos a comunicar". No se puede ejecutar dos veces sobre el mismo registro.',
+      'Dispara el envío de comunicación PMKT para una novedad: notifica al canal de Google Chat y envía correo a los destinatarios de "Correos a comunicar". ' +
+      'Antes de enviar valida que título, breve descripción, fecha de lanzamiento y al menos un destinatario estén completos; si falta alguno, devuelve la lista exacta de campos faltantes sin enviar nada. ' +
+      'Solo queda marcado como comunicado (y bloqueado para reenvío) si el correo realmente se envió.',
     inputSchema: {
       type: 'object',
       required: ['recordId'],
@@ -322,12 +355,28 @@ export async function handleUpdateRecord(args: Record<string, unknown>, caller: 
     return { error: `No puedes editar este registro — fue creado por ${existing.createdByEmail}. Solo su autor o un ADMIN pueden modificarlo.` }
   }
 
-  const { id: _omit, ...rest } = args
+  const { id: _omit, replaceArrays, ...rest } = args
   void _omit
   const { patch, errors } = await buildDataPatch(rest)
   if (errors.length > 0) return { error: 'Validación fallida', details: errors }
 
-  const mergedData = { ...(existing.data as Record<string, unknown>), ...patch }
+  const existingData = existing.data as Record<string, unknown>
+  const map = await loadFieldMap()
+  const fieldsById = new Map([...map.values()].map((info) => [info.id, info]))
+
+  const mergedPatch: Record<string, unknown> = {}
+  for (const [fieldId, value] of Object.entries(patch)) {
+    const info = fieldsById.get(fieldId)
+    const isListField = info && (info.type === 'person' || info.type === 'multiselect')
+    if (isListField && !replaceArrays && Array.isArray(value)) {
+      const prev = Array.isArray(existingData[fieldId]) ? (existingData[fieldId] as unknown[]).map(String) : []
+      mergedPatch[fieldId] = Array.from(new Set([...prev, ...value.map(String)]))
+    } else {
+      mergedPatch[fieldId] = value
+    }
+  }
+
+  const mergedData = { ...existingData, ...mergedPatch }
 
   const record = await prisma.record.update({
     where: { id },
@@ -347,7 +396,6 @@ export async function handleUpdateRecord(args: Record<string, unknown>, caller: 
     console.error('Error al generar embedding (MCP update_record):', e)
   )
 
-  const map = await loadFieldMap()
   return { ...recordBase(record), ...mapRecordData(record.data as Record<string, unknown>, map) }
 }
 
@@ -398,32 +446,60 @@ export async function handleNotifyPmkt(args: Record<string, unknown>, caller: Ca
     .map(String)
     .filter((e) => e.includes('@'))
 
-  if (recipients.length === 0) {
-    return { error: 'El registro no tiene destinatarios válidos en "Correos a comunicar".' }
+  // Validación explícita de campos obligatorios ANTES de intentar enviar nada.
+  // Antes solo se validaban los destinatarios; si faltaba título/descripción/fecha
+  // el correo salía igual con contenido incompleto (o, si RESEND_API_KEY no estaba
+  // configurado, el tool igual devolvía "notified: true" sin explicar por qué no
+  // llegó nada). Ahora se listan explícitamente los campos que faltan.
+  const REQUIRED_NOTIFY_FIELDS: Array<{ key: string; label: string }> = [
+    { key: 'titulo', label: 'Título' },
+    { key: 'breveDescripcion', label: 'Breve descripción' },
+    { key: 'fechaLanzamiento', label: 'Fecha de lanzamiento' },
+  ]
+  const missingFields = REQUIRED_NOTIFY_FIELDS
+    .filter(({ key }) => {
+      const v = logical[key]
+      return v === undefined || v === null || String(v).trim() === ''
+    })
+    .map(({ label }) => label)
+  if (recipients.length === 0) missingFields.push('Correos a comunicar (mínimo un destinatario válido)')
+
+  if (missingFields.length > 0) {
+    return {
+      error: 'No se puede comunicar todavía: faltan campos obligatorios en el registro.',
+      missingFields,
+    }
   }
 
   const titulo = String(logical.titulo ?? 'Nueva novedad')
   const subject = `📣 PMKT: ${titulo}`
 
   let emailSent = false
+  let emailError: string | undefined
   const RESEND_API_KEY = process.env.RESEND_API_KEY
   if (RESEND_API_KEY) {
-    const fields = await getFields()
-    const record: BitacoraRecord = {
-      id: raw.id,
-      data: raw.data as RecordData,
-      createdAt: raw.createdAt.toISOString(),
-      updatedAt: raw.updatedAt.toISOString(),
-      createdByEmail: raw.createdByEmail,
-      createdByName: raw.createdByName,
+    try {
+      const fields = await getFields()
+      const record: BitacoraRecord = {
+        id: raw.id,
+        data: raw.data as RecordData,
+        createdAt: raw.createdAt.toISOString(),
+        updatedAt: raw.updatedAt.toISOString(),
+        createdByEmail: raw.createdByEmail,
+        createdByName: raw.createdByName,
+      }
+      const html = buildHtmlEmail(subject, 'Nueva novedad lista para comunicar.', record, fields)
+      const FROM = process.env.RESEND_FROM_EMAIL ?? 'Bitácora <noreply@alegra.com>'
+      const { Resend } = await import('resend')
+      const resend = new Resend(RESEND_API_KEY)
+      await resend.emails.send({ from: FROM, to: recipients, subject, html })
+      emailSent = true
+    } catch (e) {
+      emailError = e instanceof Error ? e.message : String(e)
+      console.error('[notify_pmkt] Error enviando correo vía Resend:', e)
     }
-    const html = buildHtmlEmail(subject, 'Nueva novedad lista para comunicar.', record, fields)
-    const FROM = process.env.RESEND_FROM_EMAIL ?? 'Bitácora <noreply@alegra.com>'
-    const { Resend } = await import('resend')
-    const resend = new Resend(RESEND_API_KEY)
-    await resend.emails.send({ from: FROM, to: recipients, subject, html })
-    emailSent = true
   } else {
+    emailError = 'RESEND_API_KEY no está configurado en el servidor.'
     console.warn('[notify_pmkt] RESEND_API_KEY no configurado — se omite el envío de correo.')
   }
 
@@ -434,17 +510,33 @@ export async function handleNotifyPmkt(args: Record<string, unknown>, caller: Ca
     if (logical.breveDescripcion) chatLines.push(String(logical.breveDescripcion))
     if (logical.urlBitacora) chatLines.push(String(logical.urlBitacora))
 
-    const res = await fetch(webhookUrl, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ text: chatLines.join('\n') }),
-    })
-    chatSent = res.ok
-    if (!res.ok) {
-      console.error('[notify_pmkt] Error enviando a Google Chat:', res.status, await res.text().catch(() => ''))
+    try {
+      const res = await fetch(webhookUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text: chatLines.join('\n') }),
+      })
+      chatSent = res.ok
+      if (!res.ok) {
+        console.error('[notify_pmkt] Error enviando a Google Chat:', res.status, await res.text().catch(() => ''))
+      }
+    } catch (e) {
+      console.error('[notify_pmkt] Error de red enviando a Google Chat:', e)
     }
   } else {
     console.warn('[notify_pmkt] PMKT_CHAT_WEBHOOK_URL no configurado — se omite el envío a Chat.')
+  }
+
+  // Solo se confirma (y se registra en el audit log, que bloquea reintentos) si
+  // el correo realmente salió. Antes se marcaba "NOTIFIED_PMKT" aunque
+  // RESEND_API_KEY faltara o el envío fallara, dejando el registro bloqueado
+  // para siempre sin que el correo hubiera salido nunca.
+  if (!emailSent) {
+    return {
+      error: 'No se pudo enviar el correo de comunicación PMKT.',
+      reason: emailError ?? 'Error desconocido',
+      chatSent,
+    }
   }
 
   await addAuditLog({
