@@ -2,8 +2,7 @@ import { prisma } from '@/lib/prisma'
 import type { Prisma } from '@/generated/prisma'
 import { addAuditLog } from '@/lib/actions/audit'
 import { updateRecordEmbedding, searchSimilarRecords } from '@/lib/actions/ai'
-import { postRecordToWebhook } from '@/lib/actions/webhook'
-import type { ButtonConfig } from '@/types'
+import { notifyPmktForRecord } from '@/lib/actions/pmkt'
 import { loadFieldMap, mapRecordData, buildDataPatch } from './fields'
 import type { Caller } from './auth'
 
@@ -101,7 +100,10 @@ export const TOOLS = [
         ia: { type: 'string', description: 'Uso de IA' },
         informacionBoard: { type: 'string', description: 'Estado en board' },
         correosAComunicar: { type: 'array', items: { type: 'string' }, description: 'Correos para notificar' },
-        necesitaComunicacionPMKT: { type: 'string', description: 'Requiere comunicación PMKT' },
+        necesitaComunicacionPMKT: {
+          type: 'string',
+          description: 'Obsoleto (TMDIAPD-16): ya no hace falta configurarlo. Toda novedad/pre-novedad se comunica a PMKT automáticamente en cuanto tiene los campos obligatorios completos; no uses este campo para controlar el envío.',
+        },
         usuarioImpactado: { type: 'string', description: 'Tipo de usuario impactado' },
         taxonomiaFeature: { type: 'string', description: 'Taxonomía de la feature' },
         eventoFeatureAmplitude: { type: 'string', description: 'Nombre del evento en Amplitude' },
@@ -157,7 +159,10 @@ export const TOOLS = [
           items: { type: 'string' },
           description: 'Correos para notificar. Por defecto se agregan a los ya existentes (ver "replaceArrays").',
         },
-        necesitaComunicacionPMKT: { type: 'string' },
+        necesitaComunicacionPMKT: {
+          type: 'string',
+          description: 'Obsoleto (TMDIAPD-16): ya no hace falta configurarlo. Toda novedad/pre-novedad se comunica a PMKT automáticamente en cuanto tiene los campos obligatorios completos.',
+        },
         usuarioImpactado: { type: 'string' },
         taxonomiaFeature: { type: 'string' },
         eventoFeatureAmplitude: { type: 'string' },
@@ -204,7 +209,9 @@ export const TOOLS = [
   {
     name: 'notify_pmkt',
     description:
-      'Dispara el envío de comunicación PMKT para una novedad: notifica al canal de Google Chat y envía correo a los destinatarios de "Correos a comunicar". ' +
+      'Fallback MANUAL (TMDIAPD-16): toda novedad/pre-novedad se comunica a PMKT automáticamente en cuanto tiene los campos obligatorios completos — normalmente NO hace falta llamar a este tool. ' +
+      'Úsalo solo para reintentar un envío que falló (ej. el webhook externo estuvo caído) o para depurar por qué un registro no se ha comunicado. ' +
+      'Dispara el envío: notifica al canal de Google Chat y envía correo a los destinatarios de "Correos a comunicar". Solo aplica a tipo Novedad / Pre-novedad. ' +
       'Antes de enviar valida que título, breve descripción, fecha de lanzamiento, fecha real de producción, responsables y al menos un destinatario con formato de correo válido estén completos; si falta alguno, devuelve la lista exacta de campos faltantes sin enviar nada. ' +
       'Flujo en dos pasos: llamar SIN "confirm" primero devuelve un preview (asunto, destinatarios, campos que se incluirán) sin enviar nada; hay que mostrárselo al usuario y volver a llamar con "confirm: true" para disparar el envío real. ' +
       'Solo queda marcado como comunicado (y bloqueado para reenvío) si el correo realmente se envió.',
@@ -346,6 +353,11 @@ export async function handleCreateRecord(args: Record<string, unknown>, caller: 
     console.error('Error al generar embedding (MCP create_record):', e)
   )
 
+  notifyPmktForRecord(record.id, {
+    mode: 'auto',
+    triggeredBy: { id: caller.id, email: caller.email, name: caller.name },
+  }).catch((e) => console.error('[pmkt] auto-notify falló (MCP create_record):', e))
+
   const map = await loadFieldMap()
   return { ...recordBase(record), ...mapRecordData(record.data as Record<string, unknown>, map) }
 }
@@ -402,6 +414,11 @@ export async function handleUpdateRecord(args: Record<string, unknown>, caller: 
     console.error('Error al generar embedding (MCP update_record):', e)
   )
 
+  notifyPmktForRecord(record.id, {
+    mode: 'auto',
+    triggeredBy: { id: caller.id, email: caller.email, name: caller.name },
+  }).catch((e) => console.error('[pmkt] auto-notify falló (MCP update_record):', e))
+
   return { ...recordBase(record), ...mapRecordData(record.data as Record<string, unknown>, map) }
 }
 
@@ -430,156 +447,15 @@ export async function handleNotifyPmkt(args: Record<string, unknown>, caller: Ca
   const recordId = String(args.recordId ?? '')
   if (!recordId) return { error: 'El campo "recordId" es obligatorio.' }
 
-  const raw = await prisma.record.findUnique({ where: { id: recordId } })
-  if (!raw) return { error: `Registro "${recordId}" no encontrado.` }
-
-  const map = await loadFieldMap()
-  const rawData = raw.data as Record<string, unknown>
-  const logical = mapRecordData(rawData, map)
-
-  if (logical.necesitaComunicacionPMKT !== 'SI') {
-    return { error: 'Este registro no tiene activo el flag "Necesita comunicación de Product Marketing".' }
-  }
-
-  const already = await prisma.auditLog.findFirst({ where: { recordId, action: 'NOTIFIED_PMKT' } })
-  if (already) {
-    return { error: 'Este registro ya fue comunicado previamente.', notifiedAt: already.timestamp.toISOString() }
-  }
-
-  // Validar formato real de correo (antes solo se pedía que contuviera "@", lo
-  // que dejaba pasar basura como "a@" o "@@" hacia Resend).
-  const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
-  const correosField = map.get('correosAComunicar')
-  const recipientsRaw = correosField ? rawData[correosField.id] : undefined
-  const recipients = (Array.isArray(recipientsRaw) ? recipientsRaw : [])
-    .map(String)
-    .filter((e) => EMAIL_RE.test(e))
-
-  // Validación explícita de campos obligatorios ANTES de intentar enviar nada.
-  // Antes solo se validaban los destinatarios; si faltaba título/descripción/fecha/
-  // responsables el correo salía igual con contenido incompleto (o, si
-  // RESEND_API_KEY no estaba configurado, el tool igual devolvía "notified: true"
-  // sin explicar por qué no llegó nada). Ahora se listan explícitamente los
-  // campos que faltan, incluyendo los que agregó el fix de TMDIAPD-45
-  // (fechaProduccion, responsables) que también deben viajar en la comunicación.
-  const REQUIRED_NOTIFY_FIELDS: Array<{ key: string; label: string }> = [
-    { key: 'titulo', label: 'Título' },
-    { key: 'breveDescripcion', label: 'Breve descripción' },
-    { key: 'fechaLanzamiento', label: 'Fecha de lanzamiento' },
-    { key: 'fechaProduccion', label: 'Fecha real de producción' },
-    { key: 'responsables', label: 'Responsables' },
-  ]
-  const missingFields = REQUIRED_NOTIFY_FIELDS
-    .filter(({ key }) => {
-      const v = logical[key]
-      if (Array.isArray(v)) return v.length === 0
-      return v === undefined || v === null || String(v).trim() === ''
-    })
-    .map(({ label }) => label)
-  if (recipients.length === 0) missingFields.push('Correos a comunicar (mínimo un destinatario con formato de correo válido)')
-
-  if (missingFields.length > 0) {
-    return {
-      error: 'No se puede comunicar todavía: faltan campos obligatorios en el registro.',
-      missingFields,
-    }
-  }
-
-  const titulo = String(logical.titulo ?? 'Nueva novedad')
-  const subject = `📣 PMKT: ${titulo}`
-
-  // Segunda capa de seguridad: con todos los campos obligatorios completos,
-  // se muestra un preview exacto de asunto/destinatarios/contenido y se exige
-  // "confirm: true" en una segunda llamada para disparar el envío real. Así el
-  // usuario ve explícitamente qué se va a comunicar antes de que salga nada
-  // (y no se puede enviar "sin querer" en la misma llamada que valida).
-  if (args.confirm !== true) {
-    return {
-      preview: true,
-      subject,
-      recipients,
-      camposIncluidos: logical,
-      instrucciones: 'Revisa que el asunto, destinatarios y campos sean correctos. Para enviar de verdad, vuelve a llamar a notify_pmkt con el mismo recordId y confirm: true.',
-    }
-  }
-
-  // El envío real no usa un proveedor de correo propio (no hay Resend ni
-  // similar) — reutiliza el mismo webhook de Apps Script que ya usa el botón
-  // "Enviar email" de la app web (probado en producción: ver WEBHOOK_TRIGGERED
-  // en el audit log). Es el mismo campo tipo "button" con config.action ===
-  // "webhook", así que no hay que duplicar su configuración en ningún lado.
-  let emailSent = false
-  let emailError: string | undefined
-  try {
-    const buttonField = await prisma.field.findFirst({ where: { type: 'button' } })
-    const webhookConfig = buttonField?.config as ButtonConfig | null
-    if (!webhookConfig || webhookConfig.action !== 'webhook' || !webhookConfig.webhookUrl) {
-      throw new Error('No se encontró un campo tipo botón con acción "webhook" configurado (el mismo que usa "Enviar email" en la app web).')
-    }
-
-    const allFields = await prisma.field.findMany({ orderBy: { order: 'asc' } })
-    const fieldNameMap = new Map(allFields.map((f) => [f.id, f.name]))
-
-    await postRecordToWebhook({
-      webhookUrl: webhookConfig.webhookUrl,
-      recordId,
-      recordData: rawData,
-      fieldMap: fieldNameMap,
-      config: webhookConfig,
-      triggeredBy: caller.email,
-    })
-    emailSent = true
-  } catch (e) {
-    emailError = e instanceof Error ? e.message : String(e)
-    console.error('[notify_pmkt] Error enviando vía webhook de Apps Script:', e)
-  }
-
-  let chatSent = false
-  const webhookUrl = process.env.PMKT_CHAT_WEBHOOK_URL
-  if (webhookUrl) {
-    const chatLines = [`📣 *${titulo}*`]
-    if (logical.breveDescripcion) chatLines.push(String(logical.breveDescripcion))
-    if (logical.urlBitacora) chatLines.push(String(logical.urlBitacora))
-
-    try {
-      const res = await fetch(webhookUrl, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ text: chatLines.join('\n') }),
-      })
-      chatSent = res.ok
-      if (!res.ok) {
-        console.error('[notify_pmkt] Error enviando a Google Chat:', res.status, await res.text().catch(() => ''))
-      }
-    } catch (e) {
-      console.error('[notify_pmkt] Error de red enviando a Google Chat:', e)
-    }
-  } else {
-    console.warn('[notify_pmkt] PMKT_CHAT_WEBHOOK_URL no configurado — se omite el envío a Chat.')
-  }
-
-  // Solo se confirma (y se registra en el audit log, que bloquea reintentos) si
-  // el correo realmente salió. Antes se marcaba "NOTIFIED_PMKT" aunque
-  // RESEND_API_KEY faltara o el envío fallara, dejando el registro bloqueado
-  // para siempre sin que el correo hubiera salido nunca.
-  if (!emailSent) {
-    return {
-      error: 'No se pudo enviar el correo de comunicación PMKT.',
-      reason: emailError ?? 'Error desconocido',
-      chatSent,
-    }
-  }
-
-  await addAuditLog({
-    userId: caller.id,
-    userEmail: caller.email,
-    userName: caller.name ?? caller.email,
-    action: 'NOTIFIED_PMKT',
-    recordId,
-    details: { via: 'mcp', tool: 'notify_pmkt', emailSent, chatSent, recipients },
+  // TMDIAPD-16: el disparo normal ahora es automático (ver notifyPmktForRecord
+  // llamado desde handleCreateRecord/handleUpdateRecord). Este tool queda como
+  // fallback manual — por ejemplo si el envío automático falló y hay que
+  // reintentar, o para depurar por qué un registro no se comunicó.
+  return notifyPmktForRecord(recordId, {
+    mode: 'manual',
+    confirm: args.confirm === true,
+    triggeredBy: { id: caller.id, email: caller.email, name: caller.name },
   })
-
-  return { notified: true, emailSent, chatSent, recipients }
 }
 
 export async function handleListAuditLog(args: Record<string, unknown>): Promise<ToolResult> {

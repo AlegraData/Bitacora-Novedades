@@ -6,6 +6,7 @@ import { requireUser } from '@/lib/auth-utils'
 import type { BitacoraRecord, RecordData, FilterState } from '@/types'
 import { addAuditLog } from './audit'
 import { updateRecordEmbedding } from './ai'
+import { notifyPmktForRecord } from './pmkt'
 import type { Prisma } from '@/generated/prisma'
 
 function toRecord(r: {
@@ -111,6 +112,11 @@ export async function saveRecord(data: {
   } catch (error) {
     console.error('Error al generar embedding:', error)
   }
+
+  notifyPmktForRecord(record.id, {
+    mode: 'auto',
+    triggeredBy: { id: user.id, email: user.email, name: user.name },
+  }).catch((e) => console.error('[pmkt] auto-notify falló (saveRecord):', e))
 
   revalidatePath('/app')
   return toRecord(record)
