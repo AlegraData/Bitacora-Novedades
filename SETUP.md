@@ -142,3 +142,10 @@ bitacora-app/
 | `ADMIN` | Todo: gestionar campos, registros, usuarios, permisos |
 | `MANAGER` | Crear y editar registros (según permisos de campos) |
 | `VIEWER` | Solo visualizar registros |
+
+## API REST (`/api/v1`) y tests
+
+- Tokens `btk_…` con scopes, máximo 3 activos por usuario. Se gestionan en `/api-tokens` (usuarios) y en la pestaña **API Tokens** de `/admin`. Documentación: `/api-tokens` y `/api/v1/openapi.json`.
+- **Antes de desplegar** hay que crear las tablas `ApiKey` y `ApiRequestLog` en la base real (cambio aditivo): `npx prisma db push` con el `DATABASE_URL` de producción.
+- Variable opcional `API_RATE_LIMIT_PER_MIN` (default 120 por token y minuto, por instancia).
+- Tests: `npm run test:db:up && npm run test:db:push` (Postgres+pgvector local en el puerto 54329) y luego `npm test`. Los tests se niegan a correr si la base no es localhost. E2E por HTTP: ver cabecera de `tests/e2e/api-smoke.ts`.
