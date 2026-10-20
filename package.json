@@ -12,7 +12,8 @@
     "migrate-csv": "npx tsx prisma/migrate-csv.ts",
     "test": "node --import tsx --import ./tests/setup.ts --test --test-concurrency=1 \"tests/**/*.test.ts\" \"tests/**/*.test.tsx\"",
     "test:db:up": "docker compose -f docker-compose.test.yml up -d",
-    "test:db:push": "prisma db push --accept-data-loss"
+    "test:db:push": "prisma db push --accept-data-loss",
+    "test:e2e": "node --import tsx --import ./tests/setup.ts tests/e2e/api-smoke.ts"
   },
   "prisma": {
     "seed": "npx tsx prisma/seed.ts"
