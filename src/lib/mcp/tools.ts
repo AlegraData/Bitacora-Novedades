@@ -8,6 +8,13 @@ import type { Caller } from './auth'
 
 type ToolResult = Record<string, unknown>
 
+/** Detalle de auditoría que indica por qué canal (MCP o API REST) llegó el cambio. */
+export function auditVia(caller: Caller, tool: string, extra: Record<string, unknown> = {}) {
+  return caller.via
+    ? { via: 'api', tool, apiKeyId: caller.via.apiKeyId, apiKeyName: caller.via.apiKeyName, ...extra }
+    : { via: 'mcp', tool, ...extra }
+}
+
 const REQUIRED_CREATE_FIELDS = ['tipo', 'titulo', 'fechaLanzamiento', 'elaborado'] as const
 
 function recordBase(r: { id: string; createdAt: Date; updatedAt: Date; createdByEmail: string; createdByName: string }) {
@@ -37,6 +44,9 @@ export const TOOLS = [
         necesitaComunicacionPMKT: { type: 'string', description: 'Filtrar por flag de PMKT' },
         fechaLanzamientoDesde: { type: 'string', description: 'Inicio del rango de lanzamiento (YYYY-MM-DD)' },
         fechaLanzamientoHasta: { type: 'string', description: 'Fin del rango de lanzamiento (YYYY-MM-DD)' },
+        fechaProduccionDesde: { type: 'string', description: 'Inicio del rango de fecha real de producción (YYYY-MM-DD). Excluye novedades sin fecha de producción.' },
+        fechaProduccionHasta: { type: 'string', description: 'Fin del rango de fecha real de producción (YYYY-MM-DD)' },
+        proyectoLinear: { type: 'string', description: 'Texto contenido en el link/ID del proyecto o issue de Linear (sin distinguir mayúsculas)' },
         query: { type: 'string', description: 'Texto libre — busca en título, descripción y contenido' },
         limit: { type: 'number', description: 'Registros por página. Default: 50' },
         offset: { type: 'number', description: 'Para paginación. Default: 0' },
@@ -263,6 +273,16 @@ export async function handleListRecords(args: Record<string, unknown>): Promise<
   if (typeof args.fechaLanzamientoHasta === 'string') {
     records = records.filter((r) => typeof r.fechaLanzamiento === 'string' && (r.fechaLanzamiento as string) <= (args.fechaLanzamientoHasta as string))
   }
+  if (typeof args.fechaProduccionDesde === 'string') {
+    records = records.filter((r) => typeof r.fechaProduccion === 'string' && (r.fechaProduccion as string) >= (args.fechaProduccionDesde as string))
+  }
+  if (typeof args.fechaProduccionHasta === 'string') {
+    records = records.filter((r) => typeof r.fechaProduccion === 'string' && (r.fechaProduccion as string) <= (args.fechaProduccionHasta as string))
+  }
+  if (typeof args.proyectoLinear === 'string' && args.proyectoLinear.trim()) {
+    const needle = args.proyectoLinear.trim().toLowerCase()
+    records = records.filter((r) => typeof r.proyectoLinear === 'string' && (r.proyectoLinear as string).toLowerCase().includes(needle))
+  }
   if (typeof args.query === 'string' && args.query.trim()) {
     const q = args.query.toLowerCase()
     records = records.filter((r) => Object.values(r).some((v) => String(v ?? '').toLowerCase().includes(q)))
@@ -346,17 +366,17 @@ export async function handleCreateRecord(args: Record<string, unknown>, caller: 
     userName: caller.name ?? caller.email,
     action: 'CREATED_RECORD',
     recordId: record.id,
-    details: { via: 'mcp', tool: 'create_record' },
+    details: auditVia(caller, 'create_record'),
   })
 
   updateRecordEmbedding(record.id, record.data as Record<string, unknown>).catch((e) =>
-    console.error('Error al generar embedding (MCP create_record):', e)
+    console.error('Error al generar embedding (create_record):', e)
   )
 
   notifyPmktForRecord(record.id, {
     mode: 'auto',
     triggeredBy: { id: caller.id, email: caller.email, name: caller.name },
-  }).catch((e) => console.error('[pmkt] auto-notify falló (MCP create_record):', e))
+  }).catch((e) => console.error('[pmkt] auto-notify falló (create_record):', e))
 
   const map = await loadFieldMap()
   return { ...recordBase(record), ...mapRecordData(record.data as Record<string, unknown>, map) }
@@ -407,17 +427,17 @@ export async function handleUpdateRecord(args: Record<string, unknown>, caller: 
     userName: caller.name ?? caller.email,
     action: 'UPDATED_RECORD',
     recordId: record.id,
-    details: { via: 'mcp', tool: 'update_record', changedFields: Object.keys(patch) },
+    details: auditVia(caller, 'update_record', { changedFields: Object.keys(patch) }),
   })
 
   updateRecordEmbedding(record.id, record.data as Record<string, unknown>).catch((e) =>
-    console.error('Error al generar embedding (MCP update_record):', e)
+    console.error('Error al generar embedding (update_record):', e)
   )
 
   notifyPmktForRecord(record.id, {
     mode: 'auto',
     triggeredBy: { id: caller.id, email: caller.email, name: caller.name },
-  }).catch((e) => console.error('[pmkt] auto-notify falló (MCP update_record):', e))
+  }).catch((e) => console.error('[pmkt] auto-notify falló (update_record):', e))
 
   return { ...recordBase(record), ...mapRecordData(record.data as Record<string, unknown>, map) }
 }
@@ -437,7 +457,7 @@ export async function handleDeleteRecord(args: Record<string, unknown>, caller: 
     userName: caller.name ?? caller.email,
     action: 'DELETED_RECORD',
     recordId: id,
-    details: { via: 'mcp', tool: 'delete_record' },
+    details: auditVia(caller, 'delete_record'),
   })
 
   return { deleted: true, id }
