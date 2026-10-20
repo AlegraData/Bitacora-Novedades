@@ -27,6 +27,8 @@ export function parseQuery(params: URLSearchParams, allowed: string[]): Record<s
     if (!allow.has(key)) throw new QueryError(`Parámetro desconocido: "${key}".`)
     if (key === 'fields') continue
     const values = params.getAll(key)
+    // Postgres no admite el byte NUL en strings: llegaría como error 500 en vez de 400.
+    if (values.some((v) => v.includes('\0'))) throw new QueryError(`"${key}" contiene caracteres no permitidos.`)
 
     if (LIST_PARAMS.has(key)) {
       args[key] = values.flatMap((v) => v.split(',')).map((v) => v.trim()).filter(Boolean)
@@ -57,4 +59,11 @@ export function parseFields(params: URLSearchParams): string[] | null {
 export function project<T extends Record<string, unknown>>(row: T, fields: string[] | null): Partial<T> {
   if (!fields) return row
   return Object.fromEntries(fields.filter((f) => f in row).map((f) => [f, row[f]])) as Partial<T>
+}
+
+const ID_RE = /^[A-Za-z0-9_-]{1,64}$/
+
+/** Los ids son cuid; cualquier otra forma no puede existir, así que se responde 404 sin tocar la BD. */
+export function isValidId(id: string): boolean {
+  return ID_RE.test(id)
 }

@@ -164,3 +164,20 @@ test('notify-pmkt: tipo no aplicable → 400; confirm no booleano → 400; id in
   assert.equal((await send(notify, t, 'POST', '/api/v1/records/no-existe/notify-pmkt', {})).status, 404)
   assert.equal(await prisma.auditLog.count({ where: { action: 'NOTIFIED_PMKT' } }), 0)
 })
+
+test('caracteres NUL: id, body (crudo y escapado) y query se rechazan con 4xx, nunca 500', async () => {
+  const t = await actor('ana@alegra.com', 'VIEWER', ['records:write', 'records:read'])
+  const raw = JSON.stringify({ ...base, titulo: 'a' + String.fromCharCode(0) + 'b' })
+  assert.equal((await send(create, t, 'POST', '/api/v1/records', raw)).status, 400)
+  assert.equal((await send(create, t, 'POST', '/api/v1/records', '{"tipo":"Novedad","titulo":"a\\u0000b"}')).status, 400)
+
+  const { id } = await (await send(create, t, 'POST', '/api/v1/records', base)).json()
+  assert.equal((await send(patch, t, 'PATCH', `/api/v1/records/${id}`, '{"titulo":"x\\u0000"}')).status, 400)
+  for (const evil of ['%00', "' OR 1=1--", '..%2Fx', 'a'.repeat(65)]) {
+    assert.equal((await send(getOne, t, 'GET', `/api/v1/records/${evil}`)).status, 404, evil)
+    assert.equal((await send(patch, t, 'PATCH', `/api/v1/records/${evil}`, { titulo: 'x' })).status, 404, evil)
+    assert.equal((await send(del, t, 'DELETE', `/api/v1/records/${evil}`)).status, 403, 'sin scope de borrado se corta antes')
+    assert.equal((await send(notify, t, 'POST', `/api/v1/records/${evil}/notify-pmkt`, {})).status, 403)
+  }
+  assert.equal((await send(getOne, t, 'GET', `/api/v1/records/${id}`)).status, 200, 'un id válido sigue funcionando')
+})

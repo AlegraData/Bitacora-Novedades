@@ -1,12 +1,14 @@
 import { handleNotifyPmkt } from '@/lib/mcp/tools'
 import { apiRoute, apiError, toolResultResponse } from '@/lib/api/http'
 import { readJsonObject, BodyError } from '@/lib/api/body'
+import { isValidId } from '@/lib/api/query'
 
 /**
  * Fallback manual de la comunicación a PMKT (la normal es automática).
  * Sin `confirm: true` solo devuelve un preview y no envía nada.
  */
 export const POST = apiRoute('pmkt:notify', async ({ request, caller, params }) => {
+  if (!isValidId(params.id)) return apiError(404, 'not_found', 'Registro no encontrado.')
   try {
     const hasBody = (request.headers.get('content-length') ?? '0') !== '0'
     const body = hasBody ? await readJsonObject(request) : {}

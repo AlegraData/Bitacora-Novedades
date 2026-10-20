@@ -21,6 +21,11 @@ export async function readJsonObject(request: NextRequest): Promise<Record<strin
   const text = await request.text()
   if (text.length > MAX_BODY_BYTES) throw new BodyError(413, 'payload_too_large', 'El body supera 1 MB.')
 
+  // jsonb de Postgres rechaza el carácter NUL; sin esto la escritura fallaría con 500.
+  if (text.includes('\0') || /\\u0000/i.test(text)) {
+    throw new BodyError(400, 'invalid_json', 'El body contiene caracteres no permitidos (NUL).')
+  }
+
   let parsed: unknown
   try {
     parsed = JSON.parse(text)

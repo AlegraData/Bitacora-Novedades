@@ -136,6 +136,14 @@ test('GET /records/search: valida q y responde con results', async () => {
   assert.ok(Array.isArray((await ok.json()).results))
 })
 
+test('NUL en query (filtros de texto, recordId) → 400, nunca 500', async () => {
+  const withAudit = await createApiKey(owner, { name: 'audit2', scopes: ['audit:read', 'records:read'] })
+  assert.equal((await call(list, '/api/v1/records?query=%00', withAudit.token)).status, 400)
+  assert.equal((await call(list, '/api/v1/records?proyectoLinear=a%00b', withAudit.token)).status, 400)
+  assert.equal((await call(auditLog, '/api/v1/audit-log?recordId=%00', withAudit.token)).status, 400)
+  assert.equal((await call(auditLog, '/api/v1/audit-log?userId=x%00', withAudit.token)).status, 400)
+})
+
 test('GET /audit-log exige el scope audit:read', async () => {
   const denied = await call(auditLog, '/api/v1/audit-log')
   assert.equal(denied.status, 403)
