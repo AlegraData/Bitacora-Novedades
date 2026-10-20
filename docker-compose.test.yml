@@ -1,0 +1,10 @@
+# Postgres + pgvector efímero para correr `npm test` sin tocar Supabase.
+services:
+  db:
+    image: pgvector/pgvector:pg16
+    container_name: bitacora-test-pg
+    environment:
+      POSTGRES_PASSWORD: test
+      POSTGRES_DB: bitacora_test
+    ports:
+      - '54329:5432'
