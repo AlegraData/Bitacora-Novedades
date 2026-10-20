@@ -7,6 +7,8 @@ export interface Caller {
   email: string
   name: string | null
   role: Role
+  /** Presente cuando el request llegó por la API REST con un token (en vez de MCP/OAuth). */
+  via?: { channel: 'api'; apiKeyId: string; apiKeyName: string }
 }
 
 export async function resolveCaller(request: NextRequest): Promise<Caller | null> {
