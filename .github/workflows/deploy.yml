@@ -1,0 +1,104 @@
+name: CI / Deploy
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  GCP_PROJECT: automations-novedades-app
+  GCP_REGION: us-east1
+  CLOUD_RUN_SERVICE: bitacora-app
+  IMAGE_REPO: us-east1-docker.pkg.dev/automations-novedades-app/bitacora-app/bitacora-app
+
+jobs:
+  test:
+    name: Tests
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_PASSWORD: test
+          POSTGRES_DB: bitacora_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      # Los tests se niegan a correr si el host no es localhost (ver tests/setup.ts).
+      TEST_DATABASE_URL: postgresql://postgres:test@localhost:5432/bitacora_test
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npx prisma generate
+      - name: Crear esquema en la base de pruebas
+        run: npx prisma db push --accept-data-loss
+        env:
+          DATABASE_URL: ${{ env.TEST_DATABASE_URL }}
+      - run: npx tsc --noEmit
+      - run: npm test
+
+  deploy:
+    name: Build y deploy a Cloud Run
+    needs: test
+    # Solo en main y solo cuando ya se configuró el acceso a GCP (ver SETUP.md, "Despliegue con GitHub Actions").
+    if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request' && vars.GCP_WORKLOAD_IDENTITY_PROVIDER != ''
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    concurrency:
+      group: deploy-production
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ vars.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ vars.GCP_SERVICE_ACCOUNT }}
+
+      - uses: google-github-actions/setup-gcloud@v2
+
+      - name: Build de la imagen (Cloud Build)
+        run: |
+          gcloud builds submit . \
+            --project "$GCP_PROJECT" \
+            --config cloudbuild.yaml \
+            --substitutions "_IMAGE=${IMAGE_REPO}:${GITHUB_SHA},_NEXT_PUBLIC_SUPABASE_URL=${NEXT_PUBLIC_SUPABASE_URL},_NEXT_PUBLIC_SUPABASE_ANON_KEY=${NEXT_PUBLIC_SUPABASE_ANON_KEY}"
+        env:
+          # Son valores públicos (se hornean en el bundle del cliente), por eso son variables y no secretos.
+          NEXT_PUBLIC_SUPABASE_URL: ${{ vars.NEXT_PUBLIC_SUPABASE_URL }}
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ vars.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
+
+      - name: Deploy de una revisión nueva
+        run: |
+          gcloud run deploy "$CLOUD_RUN_SERVICE" \
+            --project "$GCP_PROJECT" \
+            --region "$GCP_REGION" \
+            --image "${IMAGE_REPO}:${GITHUB_SHA}"
+          # Mantiene :latest apuntando a lo desplegado (como se venía haciendo a mano).
+          gcloud artifacts docker tags add "${IMAGE_REPO}:${GITHUB_SHA}" "${IMAGE_REPO}:latest"
+
+      - name: Smoke test en producción
+        run: |
+          set -e
+          base=https://bitacora-novedades.alegra.com
+          code=$(curl -s -o /dev/null -w '%{http_code}' "$base/api/v1/openapi.json")
+          [ "$code" = "200" ] || { echo "openapi.json devolvió $code"; exit 1; }
+          code=$(curl -s -o /dev/null -w '%{http_code}' "$base/api/v1/me")
+          [ "$code" = "401" ] || { echo "/api/v1/me sin token devolvió $code (esperado 401)"; exit 1; }
+          echo "Smoke OK"
