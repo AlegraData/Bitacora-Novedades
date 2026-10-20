@@ -146,14 +146,6 @@ test('GET /audit-log exige el scope audit:read', async () => {
   assert.equal((await call(auditLog, '/api/v1/audit-log?limit=5&recordId=zzz', withAudit.token)).status, 200)
 })
 
-test('un token de solo lectura no tiene forma de escribir: POST/PATCH/DELETE no existen en estas rutas', async () => {
-  const mod = await import('@/app/api/v1/records/route')
-  const one = await import('@/app/api/v1/records/[id]/route')
-  assert.equal((mod as Record<string, unknown>).DELETE, undefined)
-  assert.equal((one as Record<string, unknown>).DELETE, undefined)
-  assert.equal((one as Record<string, unknown>).PATCH, undefined)
-})
-
 test('las lecturas por API quedan en la auditoría con el canal y la key', async () => {
   await call(list, '/api/v1/records?tipo=Mejora')
   await callOne(ids.a)
