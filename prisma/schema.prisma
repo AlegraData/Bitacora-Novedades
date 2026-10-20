@@ -50,10 +50,10 @@ model Tag {
 }
 
 model Record {
-  id             String            @id @default(cuid())
+  id             String           @id @default(cuid())
   data           Json
-  createdAt      DateTime          @default(now())
-  updatedAt      DateTime          @updatedAt
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @updatedAt
   createdByEmail String
   createdByName  String
   embedding      RecordEmbedding?
@@ -63,7 +63,7 @@ model RecordEmbedding {
   id        String                 @id @default(cuid())
   recordId  String                 @unique
   record    Record                 @relation(fields: [recordId], references: [id], onDelete: Cascade)
-  content   String                 // Texto plano del que se generó el embedding
+  content   String // Texto plano del que se generó el embedding
   embedding Unsupported("vector")? // Vector generado (768 para Gemini)
 }
 
@@ -140,4 +140,45 @@ model OAuthSession {
   @@index([accessToken])
   @@index([refreshToken])
   @@index([userEmail])
+}
+
+// Tokens de acceso a la API REST (/api/v1). Del token solo se guarda el hash
+// SHA-256; el valor en claro se muestra una única vez al crearlo.
+model ApiKey {
+  id                String          @id @default(cuid())
+  name              String
+  description       String?
+  prefix            String // Primeros caracteres visibles para identificarlo en listados
+  keyHash           String          @unique
+  scopes            String[]
+  ownerEmail        String // La key actúa con el rol vigente de este usuario
+  expiresAt         DateTime
+  lastUsedAt        DateTime?
+  lastUsedIp        String?
+  lastUsedUserAgent String?
+  useCount          Int             @default(0)
+  revokedAt         DateTime?
+  revokedByEmail    String?
+  createdAt         DateTime        @default(now())
+  updatedAt         DateTime        @updatedAt
+  requests          ApiRequestLog[]
+
+  @@index([ownerEmail])
+}
+
+// Una fila por request autenticado con token (incluye rechazos 403/429) para
+// poder ver cómo se está consumiendo cada key.
+model ApiRequestLog {
+  id         String   @id @default(cuid())
+  apiKeyId   String
+  apiKey     ApiKey   @relation(fields: [apiKeyId], references: [id], onDelete: Cascade)
+  timestamp  DateTime @default(now())
+  method     String
+  path       String
+  status     Int
+  ip         String?
+  userAgent  String?
+  durationMs Int
+
+  @@index([apiKeyId, timestamp])
 }
