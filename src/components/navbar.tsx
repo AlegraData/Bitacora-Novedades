@@ -113,6 +113,13 @@ export function Navbar({ userName, userEmail, userImage, userRole }: NavbarProps
           MCP
         </Link>
 
+        <Link
+          href="/api-tokens"
+          style={{ ...btnStyle, textDecoration: 'none' }}
+        >
+          API
+        </Link>
+
         {userRole === 'ADMIN' && (
           <Link
             href="/admin"
