@@ -18,8 +18,9 @@ let token: string
 let keyId: string
 let ids: Record<string, string>
 
-const call = (fn: (r: NextRequest, c?: never) => Promise<Response>, path: string, t = token) =>
-  fn(new NextRequest(`http://localhost${path}`, { headers: { authorization: `Bearer ${t}` } }))
+type Ctx = { params: Promise<Record<string, string>> }
+const call = (fn: (r: NextRequest, c: never) => Promise<Response>, path: string, t = token) =>
+  fn(new NextRequest(`http://localhost${path}`, { headers: { authorization: `Bearer ${t}` } }), { params: Promise.resolve({}) } as never)
 const callOne = (id: string, qs = '', t = token) =>
   getOne(new NextRequest(`http://localhost/api/v1/records/${id}${qs}`, { headers: { authorization: `Bearer ${t}` } }), {
     params: Promise.resolve({ id }),

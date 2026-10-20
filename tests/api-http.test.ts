@@ -10,12 +10,17 @@ import { resetDb, makeUser } from './helpers'
 const owner = { email: 'owner@alegra.com', role: 'ADMIN' as const }
 
 // Endpoint de prueba: devuelve quién es el caller y las cabeceras que recibió.
-const route = apiRoute('records:read', async ({ caller, scopes, params }) =>
+const rawRoute = apiRoute('records:read', async ({ caller, scopes, params }) =>
   apiJson({ email: caller.email, role: caller.role, via: caller.via, scopes, params })
 )
-const throwing = apiRoute(null, async () => {
+const rawThrowing = apiRoute(null, async () => {
   throw new Error('secreto interno: password=123')
 })
+
+type Ctx = { params: Promise<Record<string, string>> }
+const noCtx: Ctx = { params: Promise.resolve({}) }
+const route = (r: NextRequest, c: Ctx = noCtx) => rawRoute(r, c)
+const throwing = (r: NextRequest, c: Ctx = noCtx) => rawThrowing(r, c)
 
 function req(path: string, headers: Record<string, string> = {}, method = 'GET') {
   return new NextRequest(`http://localhost${path}`, { method, headers })

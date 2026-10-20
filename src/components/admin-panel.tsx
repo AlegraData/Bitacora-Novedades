@@ -3,6 +3,8 @@
 import { useState, useTransition } from 'react'
 import type { Field, AuditLog, Role } from '@/types'
 import type { McpSession } from '@/lib/actions/mcp-sessions'
+import type { ApiKeyDTO } from '@/lib/api/keys'
+import { ApiKeysManager } from '@/components/api-keys/api-keys-manager'
 
 interface DBUser {
   id: string
@@ -19,12 +21,14 @@ interface AdminPanelProps {
   users: DBUser[]
   auditLogs: AuditLog[]
   mcpSessions: McpSession[]
+  apiKeys: ApiKeyDTO[]
+  currentUserEmail: string
   onUpdateUserRole: (userId: string, role: Role) => Promise<void>
   onSaveFieldPermission: (fieldId: string, role: Role, canEdit: boolean) => Promise<void>
   onRevokeMcpSession: (sessionId: string) => Promise<void>
 }
 
-type Tab = 'users' | 'permissions' | 'audit' | 'mcp'
+type Tab = 'users' | 'permissions' | 'audit' | 'mcp' | 'api'
 
 function mcpStatus(refreshExpiresAt: string): { label: string; bg: string; color: string } {
   const msLeft = new Date(refreshExpiresAt).getTime() - Date.now()
@@ -33,7 +37,7 @@ function mcpStatus(refreshExpiresAt: string): { label: string; bg: string; color
   return { label: 'Activa', bg: '#c6f6d5', color: '#276749' }
 }
 
-export function AdminPanel({ fields, users: initialUsers, auditLogs, mcpSessions: initialMcpSessions, onUpdateUserRole, onSaveFieldPermission, onRevokeMcpSession }: AdminPanelProps) {
+export function AdminPanel({ fields, users: initialUsers, auditLogs, mcpSessions: initialMcpSessions, apiKeys, currentUserEmail, onUpdateUserRole, onSaveFieldPermission, onRevokeMcpSession }: AdminPanelProps) {
   const [tab, setTab] = useState<Tab>('users')
   const [users, setUsers] = useState<DBUser[]>(initialUsers)
   const [mcpSessions, setMcpSessions] = useState<McpSession[]>(initialMcpSessions)
@@ -70,12 +74,12 @@ export function AdminPanel({ fields, users: initialUsers, auditLogs, mcpSessions
     <div style={{ maxWidth: 1100, margin: '0 auto' }}>
       <div style={{ marginBottom: 24 }}>
         <h1 style={{ fontSize: 22, fontWeight: 700, color: '#1a202c' }}>Panel de Administración</h1>
-        <p style={{ fontSize: 14, color: '#718096', marginTop: 4 }}>Gestión de usuarios, permisos y auditoría</p>
+        <p style={{ fontSize: 14, color: '#718096', marginTop: 4 }}>Gestión de usuarios, permisos, auditoría y accesos de agentes y API</p>
       </div>
 
       {/* Tabs */}
       <div style={{ display: 'flex', gap: 4, marginBottom: 24, background: '#fff', padding: 4, borderRadius: 10, boxShadow: '0 2px 8px rgba(0,0,0,0.06)', width: 'fit-content' }}>
-        {([['users', '👥 Usuarios'], ['permissions', '🔐 Permisos de campos'], ['audit', '📋 Auditoría'], ['mcp', '🔌 Conexiones MCP']] as [Tab, string][]).map(([key, label]) => (
+        {([['users', '👥 Usuarios'], ['permissions', '🔐 Permisos de campos'], ['audit', '📋 Auditoría'], ['mcp', '🔌 Conexiones MCP'], ['api', '🔑 API Tokens']] as [Tab, string][]).map(([key, label]) => (
           <button
             key={key}
             onClick={() => setTab(key)}
@@ -338,6 +342,17 @@ export function AdminPanel({ fields, users: initialUsers, auditLogs, mcpSessions
               )}
             </tbody>
           </table>
+        </div>
+      )}
+
+      {/* API tokens tab */}
+      {tab === 'api' && (
+        <div>
+          <p style={{ fontSize: 13, color: '#718096', marginBottom: 12 }}>
+            Tokens de la API REST (<code>/api/v1</code>) de toda la organización. Cada token actúa con el rol de su dueño y limitado a sus permisos (scopes).
+            Revocar corta el acceso de inmediato. Cada usuario puede tener máximo 3 tokens activos y crear los suyos en <a href="/api-tokens" style={{ color: '#00A888' }}>/api-tokens</a>.
+          </p>
+          <ApiKeysManager initialKeys={apiKeys} mode="admin" isAdmin currentUserEmail={currentUserEmail} />
         </div>
       )}
     </div>

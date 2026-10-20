@@ -68,7 +68,8 @@ type RouteCtx = { params: Promise<Record<string, string>> }
  * aplica rate limit, ejecuta el handler y registra el request.
  */
 export function apiRoute(scope: Scope | null, handler: Handler) {
-  return async (request: NextRequest, routeCtx?: RouteCtx): Promise<Response> => {
+  // El segundo argumento es obligatorio en el tipo: el validador de rutas de Next 16 no acepta uno opcional.
+  return async (request: NextRequest, routeCtx: RouteCtx): Promise<Response> => {
     const started = Date.now()
     const ip = clientIp(request)
     const ipKey = ip ?? 'unknown'
@@ -155,7 +156,7 @@ export function apiRoute(scope: Scope | null, handler: Handler) {
           keyId: key.id,
           keyName: key.name,
           scopes: key.scopes as Scope[],
-          params: routeCtx ? await routeCtx.params : {},
+          params: (await routeCtx?.params) ?? {},
         })
         for (const [k, v] of Object.entries(rlHeaders)) response.headers.set(k, v)
       } catch (e) {

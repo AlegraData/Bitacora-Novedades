@@ -18,7 +18,7 @@ async function actor(email: string, role: Role, scopes: string[]) {
 }
 
 function send(
-  fn: (r: NextRequest, c?: never) => Promise<Response>,
+  fn: (r: NextRequest, c: never) => Promise<Response>,
   t: string,
   method: string,
   path: string,
