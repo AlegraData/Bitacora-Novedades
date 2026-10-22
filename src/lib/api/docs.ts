@@ -99,6 +99,16 @@ export const ENDPOINTS: Endpoint[] = [
     example: `curl -X POST -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \\\n  -d '{"confirm":false}' ${API_BASE_URL}/records/<id>/notify-pmkt`,
   },
   {
+    method: 'GET', path: '/records/{id}/email-deliveries', scope: 'records:read', summary: 'Historial de envíos de correo de una novedad: quién, cuándo, por qué canal, a quién, con qué resultado y el motivo si falló.', mcpTool: 'list_email_deliveries',
+    params: [idParam, { name: 'status', in: 'query', type: 'string', description: 'sending | sent | failed | simulated.' }, { name: 'mode', in: 'query', type: 'string', description: 'webhook | shadow | test | live | simulate | legacy.' }, { name: 'limit', in: 'query', type: 'integer', description: 'Default 50, máximo 200.' }, { name: 'offset', in: 'query', type: 'integer', description: 'Para paginar.' }],
+    example: `curl -H "Authorization: Bearer $TOKEN" ${API_BASE_URL}/records/<id>/email-deliveries`,
+  },
+  {
+    method: 'GET', path: '/email-deliveries', scope: 'audit:read', summary: 'Historial de envíos de correo de toda la Bitácora, con los mismos filtros más recordId.', mcpTool: 'list_email_deliveries',
+    params: [{ name: 'recordId', in: 'query', type: 'string', description: 'Filtra por novedad.' }, { name: 'status', in: 'query', type: 'string', description: 'sending | sent | failed | simulated.' }, { name: 'mode', in: 'query', type: 'string', description: 'webhook | shadow | test | live | simulate | legacy.' }, { name: 'limit', in: 'query', type: 'integer', description: 'Default 50, máximo 200.' }, { name: 'offset', in: 'query', type: 'integer', description: 'Para paginar.' }],
+    example: `curl -G -H "Authorization: Bearer $TOKEN" --data-urlencode "status=failed" ${API_BASE_URL}/email-deliveries`,
+  },
+  {
     method: 'GET', path: '/audit-log', scope: 'audit:read', summary: 'Historial de cambios y accesos.', mcpTool: 'list_audit_log',
     params: [
       { name: 'recordId', in: 'query', type: 'string', description: 'Filtra por registro.' },

@@ -6,6 +6,7 @@ const READ_ACTIONS = {
   get_record: 'API_VIEWED_RECORD',
   search_records_semantic: 'API_SEARCHED_RECORDS',
   list_audit_log: 'API_VIEWED_AUDIT_LOG',
+  list_email_deliveries: 'API_LISTED_EMAIL_DELIVERIES',
 } as const
 
 /** Las lecturas por API quedan en la auditoría igual que las del MCP. */

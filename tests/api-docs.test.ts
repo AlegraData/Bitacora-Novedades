@@ -27,6 +27,7 @@ test('todo método exportado por las rutas de /api/v1 está documentado', () => 
   const files: [string, string][] = [
     ['/me', 'me'], ['/fields', 'fields'], ['/records', 'records'], ['/records/search', 'records/search'],
     ['/records/{id}', 'records/[id]'], ['/records/{id}/notify-pmkt', 'records/[id]/notify-pmkt'], ['/audit-log', 'audit-log'],
+    ['/records/{id}/email-deliveries', 'records/[id]/email-deliveries'], ['/email-deliveries', 'email-deliveries'],
   ]
   for (const [apiPath, dir] of files) {
     const src = readFileSync(join(process.cwd(), 'src/app/api/v1', dir, 'route.ts'), 'utf8')

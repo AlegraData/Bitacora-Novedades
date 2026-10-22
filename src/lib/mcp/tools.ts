@@ -4,6 +4,7 @@ import { addAuditLog } from '@/lib/actions/audit'
 import { updateRecordEmbedding, searchSimilarRecords } from '@/lib/actions/ai'
 import { sendNovedad, type SendActor, type SendResult } from '@/lib/email/service'
 import { toClientResult } from '@/lib/email/public'
+import { listDeliveries } from '@/lib/email/history'
 import { loadFieldMap, mapRecordData, buildDataPatch } from './fields'
 import type { Caller } from './auth'
 
@@ -214,6 +215,22 @@ export const TOOLS = [
         desde: { type: 'string', description: 'Inicio del rango de fecha (YYYY-MM-DD)' },
         hasta: { type: 'string', description: 'Fin del rango de fecha (YYYY-MM-DD)' },
         limit: { type: 'number', description: 'Default: 50' },
+      },
+    },
+  },
+  {
+    name: 'list_email_deliveries',
+    description:
+      'Historial de envíos de correo de las novedades: quién lo disparó, cuándo, por qué canal, a quién, con qué resultado (sent | failed | simulated | sending) y, si falló, el motivo (errorCode / errorMessage). ' +
+      'Úsalo para saber si una novedad ya se comunicó, cuándo y por qué falló un envío. Filtra por recordId para ver una novedad.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        recordId: { type: 'string', description: 'Filtrar por novedad' },
+        status: { type: 'string', description: 'sending | sent | failed | simulated' },
+        mode: { type: 'string', description: 'webhook | shadow | test | live | simulate | legacy' },
+        limit: { type: 'number', description: 'Default 50, máximo 200' },
+        offset: { type: 'number', description: 'Para paginación' },
       },
     },
   },
@@ -485,6 +502,10 @@ export async function handleNotifyPmkt(args: Record<string, unknown>, caller: Ca
     ...shaped,
     instrucciones: 'Esto es un simulacro: no se envió nada. Revisa asunto, destinatarios y texto; para enviar de verdad vuelve a llamar con confirm: true.',
   }
+}
+
+export async function handleListEmailDeliveries(args: Record<string, unknown>, caller: Caller): Promise<ToolResult> {
+  return { ...(await listDeliveries(caller.role, args)) }
 }
 
 function actorOf(caller: Caller): SendActor {

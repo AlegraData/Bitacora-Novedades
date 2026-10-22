@@ -12,6 +12,7 @@ import {
   handleDeleteRecord,
   handleNotifyPmkt,
   handleListAuditLog,
+  handleListEmailDeliveries,
 } from '@/lib/mcp/tools'
 
 const SERVER_INFO = { name: 'bitacora-novedades-mcp', version: '1.0.0' }
@@ -22,6 +23,7 @@ const READ_ACTIONS: Record<string, string> = {
   get_record: 'MCP_VIEWED_RECORD',
   search_records_semantic: 'MCP_SEARCHED_RECORDS',
   list_audit_log: 'MCP_VIEWED_AUDIT_LOG',
+  list_email_deliveries: 'MCP_LISTED_EMAIL_DELIVERIES',
 }
 
 async function logMcpRead(toolName: string, toolArgs: Record<string, unknown>, caller: Caller) {
@@ -143,6 +145,9 @@ export async function POST(request: NextRequest) {
           break
         case 'list_audit_log':
           result = await handleListAuditLog(toolArgs)
+          break
+        case 'list_email_deliveries':
+          result = await handleListEmailDeliveries(toolArgs, caller)
           break
         default:
           return jsonRpcError(id, -32601, `Tool "${toolName}" not implemented`)
