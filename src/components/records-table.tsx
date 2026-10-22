@@ -8,6 +8,7 @@ import { saveTag, deleteTag } from '@/lib/actions/tags'
 import { sendRecordEmail } from '@/lib/actions/email'
 import { EmailResultBanner, EmailPreviewModal } from '@/components/email/email-panels'
 import type { SendResult } from '@/lib/email/service'
+import { PendingChip, pendingFor } from '@/components/email/communication-status'
 import { saveView, deleteView } from '@/lib/actions/views'
 import { RecordEditor } from './record-editor'
 import { RecordDetail } from './record-detail'
@@ -316,8 +317,9 @@ interface RecordsTableProps {
   initialRecordId?: string
 }
 
-function ButtonCell({ done, sending, isAdmin, onSend, onPreview }: {
+function ButtonCell({ done, missing, sending, isAdmin, onSend, onPreview }: {
   done: boolean
+  missing: string[] | null
   sending: boolean
   isAdmin: boolean
   onSend: () => void
@@ -345,6 +347,7 @@ function ButtonCell({ done, sending, isAdmin, onSend, onPreview }: {
       >
         👁
       </button>
+      <PendingChip missing={missing} />
     </div>
   )
 }
@@ -1161,13 +1164,13 @@ export function RecordsTable({
                       const isLastSticky = i === pinnedFields.length - 1
                       return (
                         <td key={field.id} style={{ ...tdStyle, position: 'sticky', left: stickyLefts[fixedCount + i] ?? 0, zIndex: 2, background: stickyBg, boxShadow: isLastSticky ? '4px 0 8px -2px rgba(0,196,160,0.25)' : undefined }}>
-                          {field.type === 'button' ? <ButtonCell done={Boolean(record.data[field.id])} sending={sendingId === record.id} isAdmin={userRole === 'ADMIN'} onSend={() => handleTriggerButton(record, field)} onPreview={() => handleTriggerButton(record, field, { simulate: true })} /> : field.id === titleFieldId ? <TitleCell record={record} field={field} onClick={() => setDetailRecord(record)} /> : <CellValue field={field} value={record.data[field.id]} allTags={tags} />}
+                          {field.type === 'button' ? <ButtonCell done={Boolean(record.data[field.id])} missing={pendingFor(record.data, fields_, record.createdAt, Boolean(record.data[field.id]))} sending={sendingId === record.id} isAdmin={userRole === 'ADMIN'} onSend={() => handleTriggerButton(record, field)} onPreview={() => handleTriggerButton(record, field, { simulate: true })} /> : field.id === titleFieldId ? <TitleCell record={record} field={field} onClick={() => setDetailRecord(record)} /> : <CellValue field={field} value={record.data[field.id]} allTags={tags} />}
                         </td>
                       )
                     })}
                     {nonPinnedFields.map((field) => (
                       <td key={field.id} style={{ ...tdStyle }}>
-                        {field.type === 'button' ? <ButtonCell done={Boolean(record.data[field.id])} sending={sendingId === record.id} isAdmin={userRole === 'ADMIN'} onSend={() => handleTriggerButton(record, field)} onPreview={() => handleTriggerButton(record, field, { simulate: true })} /> : field.id === titleFieldId ? <TitleCell record={record} field={field} onClick={() => setDetailRecord(record)} /> : <CellValue field={field} value={record.data[field.id]} allTags={tags} />}
+                        {field.type === 'button' ? <ButtonCell done={Boolean(record.data[field.id])} missing={pendingFor(record.data, fields_, record.createdAt, Boolean(record.data[field.id]))} sending={sendingId === record.id} isAdmin={userRole === 'ADMIN'} onSend={() => handleTriggerButton(record, field)} onPreview={() => handleTriggerButton(record, field, { simulate: true })} /> : field.id === titleFieldId ? <TitleCell record={record} field={field} onClick={() => setDetailRecord(record)} /> : <CellValue field={field} value={record.data[field.id]} allTags={tags} />}
                       </td>
                     ))}
                   </tr>

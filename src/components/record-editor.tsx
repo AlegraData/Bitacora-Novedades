@@ -9,21 +9,6 @@ import remarkGfm from 'remark-gfm'
 
 function uid() { return Math.random().toString(36).slice(2, 10) }
 
-// ── Conditional field visibility constants ────────────────────────────────────
-// TMDIAPD-16: estos campos dependían de "Necesita comunicación de Product
-// Marketing" (SI/NO). Ese flag se eliminó del flujo (ahora toda Novedad/
-// Pre-novedad se comunica sola) — los dependientes se re-atan a Tipo.
-const PMKT_TIPOS = new Set(['novedad', 'pre-novedad', 'pre novedad'])
-const COMM_DEPENDENT_NAMES = new Set([
-  'usuario impactado', 'taxonomia feature', 'evento feature amplitude',
-  'comentario evento', 'link tablero amplitude', 'manual de usuario', 'artículo help center',
-])
-function naValueForType(type: string): unknown {
-  if (type === 'checkbox') return false
-  if (type === 'multiselect' || type === 'person') return []
-  return 'N/A'
-}
-
 const REQUIRED_FIELD_NAMES = new Set(['título', 'tipo', 'fecha de lanzamiento', 'elaborado'])
 function isFieldEmpty(value: unknown): boolean {
   if (value === null || value === undefined || value === '') return true
@@ -52,14 +37,7 @@ export function RecordEditor({ record, fields, tags, userRole, onSave, onClose }
 
   const visibleFields = fields.filter((f) => f.isVisible && f.type !== 'button')
 
-  // Conditional visibility: campos dependientes solo para Novedad/Pre-novedad
-  const tipoField = visibleFields.find(f => f.name.toLowerCase().trim() === 'tipo')
-  const tipoNoAplica = tipoField
-    ? !PMKT_TIPOS.has(String(formData[tipoField.id] ?? '').toLowerCase().trim())
-    : false
-  const displayFields = visibleFields.filter(f =>
-    !(tipoNoAplica && COMM_DEPENDENT_NAMES.has(f.name.toLowerCase().trim()))
-  )
+  const displayFields = visibleFields
 
   // Auto-populate URL Bitácora if empty when opening an existing record
   useEffect(() => {
@@ -81,17 +59,6 @@ export function RecordEditor({ record, fields, tags, userRole, onSave, onClose }
   function setField(fieldId: string, value: unknown) {
     setFormData((prev) => {
       const next: RecordData = { ...prev, [fieldId]: value as RecordData[string] }
-      // Auto-fill dependents with N/A when Tipo deja de ser Novedad/Pre-novedad
-      if (tipoField && fieldId === tipoField.id) {
-        const nowNoAplica = !PMKT_TIPOS.has(String(value ?? '').toLowerCase().trim())
-        if (nowNoAplica) {
-          for (const f of visibleFields) {
-            if (COMM_DEPENDENT_NAMES.has(f.name.toLowerCase().trim())) {
-              next[f.id] = naValueForType(f.type) as RecordData[string]
-            }
-          }
-        }
-      }
       return next
     })
   }

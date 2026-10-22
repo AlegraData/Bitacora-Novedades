@@ -7,25 +7,11 @@ import { MultiSelectDropdown } from './multi-select-dropdown'
 import { sendRecordEmail } from '@/lib/actions/email'
 import { EmailResultBanner, EmailPreviewModal, EmailHistory } from '@/components/email/email-panels'
 import type { SendResult } from '@/lib/email/service'
+import { CommunicationStatus } from '@/components/email/communication-status'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 
 function uid() { return Math.random().toString(36).slice(2, 10) }
-
-// ── Conditional field visibility constants ────────────────────────────────────
-// TMDIAPD-16: estos campos dependían de "Necesita comunicación de Product
-// Marketing" (SI/NO). Ese flag se eliminó del flujo (ahora toda Novedad/
-// Pre-novedad se comunica sola) — los dependientes se re-atan a Tipo.
-const PMKT_TIPOS = new Set(['novedad', 'pre-novedad', 'pre novedad'])
-const COMM_DEPENDENT_NAMES = new Set([
-  'usuario impactado', 'taxonomia feature', 'evento feature amplitude',
-  'comentario evento', 'link tablero amplitude', 'manual de usuario', 'artículo help center',
-])
-function naValueForType(type: string): unknown {
-  if (type === 'checkbox') return false
-  if (type === 'multiselect' || type === 'person') return []
-  return 'N/A'
-}
 
 const REQUIRED_FIELD_NAMES = new Set(['título', 'tipo', 'fecha de lanzamiento', 'elaborado'])
 function isFieldEmpty(value: unknown): boolean {
@@ -75,19 +61,12 @@ export function RecordDetail({ record, fields, tags, userRole, onSave, onClose, 
   const dataFields = fields.filter((f) => f.isVisible && f.type !== 'button')
   const buttonFields = fields.filter((f) => f.isVisible && f.type === 'button')
 
-  // Conditional visibility: campos dependientes solo para Novedad/Pre-novedad
-  const tipoField = dataFields.find(f => f.name.toLowerCase().trim() === 'tipo')
-  const tipoNoAplica = tipoField
-    ? !PMKT_TIPOS.has(String(formData[tipoField.id] ?? '').toLowerCase().trim())
-    : false
-
   // Detect title field (show large at top)
   const titleField = dataFields.find((f) =>
     ['título', 'title', 'nombre', 'name'].includes(f.name.toLowerCase())
   ) ?? dataFields[0]
   const propertyFields = dataFields.filter((f) => {
     if (f.id === titleField?.id) return false
-    if (tipoNoAplica && COMM_DEPENDENT_NAMES.has(f.name.toLowerCase().trim())) return false
     return true
   })
 
@@ -143,17 +122,6 @@ export function RecordDetail({ record, fields, tags, userRole, onSave, onClose, 
   function setField(fieldId: string, value: unknown) {
     setFormData((prev) => {
       const next: RecordData = { ...prev, [fieldId]: value as RecordData[string] }
-      // Auto-fill dependents with N/A when Tipo deja de ser Novedad/Pre-novedad
-      if (tipoField && fieldId === tipoField.id) {
-        const nowNoAplica = !PMKT_TIPOS.has(String(value ?? '').toLowerCase().trim())
-        if (nowNoAplica) {
-          for (const f of dataFields) {
-            if (COMM_DEPENDENT_NAMES.has(f.name.toLowerCase().trim())) {
-              next[f.id] = naValueForType(f.type) as RecordData[string]
-            }
-          }
-        }
-      }
       return next
     })
   }
@@ -437,6 +405,7 @@ export function RecordDetail({ record, fields, tags, userRole, onSave, onClose, 
                 </span>
                 <div style={{ flex: 1, height: 1, background: '#e2e8f0' }} />
               </div>
+              <CommunicationStatus data={formData} fields={fields} createdAt={record.createdAt} done={buttonFields.some((f) => Boolean(formData[f.id]))} />
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12 }}>
                 {buttonFields.map((field) => {
                   const executed = Boolean(formData[field.id])
