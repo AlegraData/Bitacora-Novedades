@@ -111,9 +111,9 @@ export function RecordDetail({ record, fields, tags, userRole, onSave, onClose, 
     return true  // All roles can edit by default
   }
 
-  const handleTriggerButton = useCallback(async (field: Field, opts: { simulate?: boolean } = {}) => {
+  const handleTriggerButton = useCallback(async (field: Field, opts: { simulate?: boolean; forceResend?: boolean } = {}) => {
     let resendReason: string | undefined
-    if (!opts.simulate && Boolean(formData[field.id])) {
+    if (!opts.simulate && (opts.forceResend || Boolean(formData[field.id]))) {
       if (userRole !== 'ADMIN') return
       const reason = window.prompt('Esta novedad ya se comunicó. Indica el motivo del reenvío:')
       if (!reason?.trim()) return
@@ -489,6 +489,7 @@ export function RecordDetail({ record, fields, tags, userRole, onSave, onClose, 
                     onClose={() => setEmailResult(null)}
                     onPreview={() => setEmailPreview(emailResult.result)}
                     onRetry={() => handleTriggerButton(emailResult.field)}
+                    onResend={() => handleTriggerButton(emailResult.field, { forceResend: true })}
                   />
                 </div>
               )}

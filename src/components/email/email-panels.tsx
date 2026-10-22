@@ -30,12 +30,15 @@ export function EmailResultBanner({
   onClose,
   onRetry,
   onPreview,
+  onResend,
   isAdmin,
 }: {
   result: SendResult
   onClose: () => void
   onRetry?: () => void
   onPreview?: () => void
+  /** Solo ADMIN: reenviar algo ya comunicado (pide el motivo). */
+  onResend?: () => void
   isAdmin: boolean
 }) {
   const [showDetail, setShowDetail] = useState(false)
@@ -80,7 +83,7 @@ export function EmailResultBanner({
 
       {err && (
         <div style={{ marginTop: 6 }}>
-          <div>{err.message}</div>
+          <div>{err.code === 'DUPLICATE' && isAdmin ? 'Esta novedad ya se comunicó antes. Como ADMIN puedes reenviarla indicando el motivo.' : err.message}</div>
           {err.missingFields && err.missingFields.length > 0 && (
             <div style={{ marginTop: 4 }}>
               <b>Completa estos campos:</b>
@@ -107,6 +110,7 @@ export function EmailResultBanner({
       <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
         {result.status === 'simulated' && onPreview && <button onClick={onPreview} style={smallBtn}>Ver el correo</button>}
         {result.status === 'failed' && err && RETRYABLE.includes(err.code) && onRetry && <button onClick={onRetry} style={smallBtn}>↻ Reintentar</button>}
+        {result.status === 'failed' && err?.code === 'DUPLICATE' && isAdmin && onResend && <button onClick={onResend} style={{ ...smallBtn, background: '#1e2a3a', color: '#fff', border: 'none' }}>↺ Reenviar como ADMIN</button>}
       </div>
     </div>
   )

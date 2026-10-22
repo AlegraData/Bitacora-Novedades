@@ -72,3 +72,22 @@ test('historial: cerrado por defecto (no consulta nada hasta que se abre)', () =
   assert.ok(h.includes('Historial de envíos'))
   assert.ok(!h.includes('Cargando'))
 })
+
+test('duplicado: el ADMIN ve «Reenviar como ADMIN» (aunque el botón de la novedad esté en «No»); el usuario normal no', () => {
+  const dup: SendResult = { ok: false, status: 'failed', error: { code: 'DUPLICATE', message: 'Esta novedad ya se comunicó antes. Solo un ADMIN puede reenviarla.', previous: { deliveryId: 'legacy:1', sentAt: '2026-10-16T21:18:53Z', by: 'juan.alvarez@alegra.com' } } }
+  const withResend = (isAdmin: boolean) => html(<EmailResultBanner result={dup} isAdmin={isAdmin} onClose={noop} onResend={noop} />)
+
+  const admin = withResend(true)
+  assert.ok(admin.includes('Reenviar como ADMIN'))
+  assert.ok(admin.includes('Como ADMIN puedes reenviarla indicando el motivo'))
+  assert.ok(admin.includes('juan.alvarez@alegra.com'), 'sigue diciendo quién lo envió antes')
+
+  const user = withResend(false)
+  assert.ok(!user.includes('Reenviar como ADMIN'))
+  assert.ok(user.includes('Solo un ADMIN puede reenviarla'))
+
+  // sin handler (p. ej. el aviso del auto-guardado) no hay botón aunque sea ADMIN
+  assert.ok(!html(<EmailResultBanner result={dup} isAdmin onClose={noop} />).includes('Reenviar como ADMIN'))
+  // otros errores no ofrecen reenvío
+  assert.ok(!html(<EmailResultBanner result={{ ok: false, status: 'failed', error: { code: 'VALIDATION', message: 'x' } }} isAdmin onClose={noop} onResend={noop} />).includes('Reenviar como ADMIN'))
+})

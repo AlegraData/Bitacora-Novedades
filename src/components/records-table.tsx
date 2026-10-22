@@ -685,7 +685,7 @@ export function RecordsTable({
     })
   }, [])
 
-  const handleTriggerButton = useCallback(async (record: BitacoraRecord, field: Field, opts: { simulate?: boolean } = {}) => {
+  const handleTriggerButton = useCallback(async (record: BitacoraRecord, field: Field, opts: { simulate?: boolean; forceResend?: boolean } = {}) => {
     // Validar campos requeridos antes de enviar
     const btnConfig = field.config as { sendAllFields?: boolean; selectedFieldIds?: string[] } | null
     if (btnConfig?.sendAllFields === false && (btnConfig.selectedFieldIds?.length ?? 0) > 0) {
@@ -701,7 +701,7 @@ export function RecordsTable({
       }
     }
     let resendReason: string | undefined
-    if (!opts.simulate && Boolean(record.data[field.id])) {
+    if (!opts.simulate && (opts.forceResend || Boolean(record.data[field.id]))) {
       if (userRole !== 'ADMIN') return
       const reason = window.prompt('Esta novedad ya se comunicó. Indica el motivo del reenvío:')
       if (!reason?.trim()) return
@@ -1252,6 +1252,7 @@ export function RecordsTable({
             onClose={() => setEmailBanner(null)}
             onPreview={() => setEmailPreview(emailBanner.result)}
             onRetry={emailBanner.field ? () => handleTriggerButton(emailBanner.record, emailBanner.field!) : undefined}
+            onResend={emailBanner.field ? () => handleTriggerButton(emailBanner.record, emailBanner.field!, { forceResend: true }) : undefined}
           />
         </div>
       )}
