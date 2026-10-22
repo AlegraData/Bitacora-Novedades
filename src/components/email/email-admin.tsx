@@ -4,6 +4,7 @@ import { useEffect, useState, useTransition } from 'react'
 import type { AdminState } from '@/lib/email/admin'
 import type { DeliveryMode } from '@/lib/email/settings'
 import { getEmailAdminState, saveEmailSettings, verifyEmailConnection } from '@/lib/actions/email-admin'
+import { TemplateEditor } from './template-editor'
 
 const card = { background: '#fff', borderRadius: 12, boxShadow: '0 2px 8px rgba(0,0,0,0.06)', padding: '18px 20px', marginBottom: 16 } as const
 const inputStyle = { width: '100%', padding: '8px 10px', border: '1px solid #cbd5e1', borderRadius: 8, fontSize: 13, boxSizing: 'border-box' } as const
@@ -34,9 +35,16 @@ function Row({ label, children }: { label: string; children: React.ReactNode }) 
   )
 }
 
+type Sub = 'config' | 'template'
+const SUBTABS: [Sub, string][] = [
+  ['config', 'Configuración'],
+  ['template', 'Plantilla'],
+]
+
 export function EmailAdmin() {
   const [state, setState] = useState<AdminState | null>(null)
   const [loadError, setLoadError] = useState<string | null>(null)
+  const [sub, setSub] = useState<Sub>('config')
 
   useEffect(() => {
     getEmailAdminState().then(setState).catch(() => setLoadError('No se pudo cargar la configuración de correos.'))
@@ -50,7 +58,15 @@ export function EmailAdmin() {
       <p style={{ fontSize: 13, color: '#718096', marginBottom: 14 }}>
         Cómo salen los correos de las novedades. El modo se cambia al instante y sin desplegar: sirve también para volver atrás si algo no se ve bien.
       </p>
-      <SettingsPanel state={state} onChange={(s) => setState({ ...state, settings: s })} />
+      <div style={{ display: 'flex', gap: 4, marginBottom: 14, borderBottom: '1px solid #e2e8f0' }}>
+        {SUBTABS.map(([k, label]) => (
+          <button key={k} onClick={() => setSub(k)} style={{ padding: '8px 14px', border: 'none', background: 'none', cursor: 'pointer', fontSize: 13, fontWeight: 600, color: sub === k ? '#00A888' : '#64748b', borderBottom: `2px solid ${sub === k ? '#00C4A0' : 'transparent'}`, marginBottom: -1 }}>
+            {label}
+          </button>
+        ))}
+      </div>
+      {sub === 'config' && <SettingsPanel state={state} onChange={(s) => setState({ ...state, settings: s })} />}
+      {sub === 'template' && <TemplateEditor />}
     </div>
   )
 }

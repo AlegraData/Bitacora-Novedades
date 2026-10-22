@@ -83,6 +83,9 @@ export async function listRevisions(limit = 30): Promise<RevisionDTO[]> {
 }
 
 export async function getRevision(version: number) {
+  if (!Number.isInteger(version) || version < 1) {
+    throw new EmailSendError({ code: 'NOT_FOUND', message: 'Esa versión de la plantilla no existe.' })
+  }
   const r = await prisma.emailTemplateRevision.findFirst({ where: { templateKey: TEMPLATE_KEY, version } })
   if (!r) throw new EmailSendError({ code: 'NOT_FOUND', message: 'Esa versión de la plantilla no existe.' })
   return { subject: r.subject, html: r.html, version: r.version }
