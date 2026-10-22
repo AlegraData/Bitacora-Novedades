@@ -6,7 +6,8 @@ import { requireUser } from '@/lib/auth-utils'
 import type { BitacoraRecord, RecordData, FilterState } from '@/types'
 import { addAuditLog } from './audit'
 import { updateRecordEmbedding } from './ai'
-import { notifyPmktForRecord } from './pmkt'
+import { sendNovedad, type SendResult } from '@/lib/email/service'
+import { toClientResult } from '@/lib/email/public'
 import type { Prisma } from '@/generated/prisma'
 
 function toRecord(r: {
@@ -79,7 +80,7 @@ export async function getRecord(id: string): Promise<BitacoraRecord | null> {
 export async function saveRecord(data: {
   id?: string
   recordData: RecordData
-}): Promise<BitacoraRecord> {
+}): Promise<BitacoraRecord & { email?: SendResult }> {
   const user = await requireUser()
   const isNew = !data.id
 
@@ -113,13 +114,26 @@ export async function saveRecord(data: {
     console.error('Error al generar embedding:', error)
   }
 
-  notifyPmktForRecord(record.id, {
-    mode: 'auto',
-    triggeredBy: { id: user.id, email: user.email, name: user.name },
-  }).catch((e) => console.error('[pmkt] auto-notify falló (saveRecord):', e))
+  // Comunicación automática: se espera el resultado (en Cloud Run el trabajo posterior a la respuesta
+  // puede cortarse) pero un fallo del correo nunca hace fallar el guardado del registro.
+  let email: SendResult | undefined
+  try {
+    email = toClientResult(
+      await sendNovedad({
+        recordId: record.id,
+        actor: { id: user.id, email: user.email, name: user.name, role: user.role },
+        channel: 'web',
+        trigger: 'auto',
+      }),
+      user.role
+    )
+  } catch (e) {
+    console.error('[email] auto-envío falló (saveRecord):', e)
+    email = { ok: false, status: 'failed', error: { code: 'UNKNOWN', message: 'No se pudo procesar el envío automático.' } }
+  }
 
   revalidatePath('/app')
-  return toRecord(record)
+  return { ...toRecord(record), email }
 }
 
 export async function deleteRecord(recordId: string): Promise<void> {

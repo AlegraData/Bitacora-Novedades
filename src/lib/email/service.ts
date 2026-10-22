@@ -1,7 +1,7 @@
 import { prisma } from '@/lib/prisma'
 import type { Prisma } from '@/generated/prisma'
 import { addAuditLog } from '@/lib/actions/audit'
-import { postRecordToWebhook } from '@/lib/actions/webhook'
+import { postRecordToWebhook } from './legacy-webhook'
 import { loadFieldMap, mapRecordData } from '@/lib/mcp/fields'
 import type { ButtonConfig, Role } from '@/types'
 import { EmailSendError, type EmailError, type EmailErrorCode } from './errors'

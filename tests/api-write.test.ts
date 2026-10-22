@@ -151,18 +151,21 @@ test('DELETE: exige scope Y rol ADMIN vigente del dueño; 404 si no existe; audi
   assert.equal((log.details as Record<string, unknown>).via, 'api')
 })
 
-test('notify-pmkt: tipo no aplicable → 400; confirm no booleano → 400; id inexistente → 404; nunca envía', async () => {
+test('notify-pmkt: tipo no aplicable → 422 con código; confirm no booleano → 400; id inexistente → 404; nunca envía', async () => {
   const t = await actor('ana@alegra.com', 'VIEWER', ['records:write', 'pmkt:notify'])
   const mejora = await (await send(create, t, 'POST', '/api/v1/records', { ...base, tipo: 'Mejora' })).json()
   const res = await send(notify, t, 'POST', `/api/v1/records/${mejora.id}/notify-pmkt`, {})
-  assert.equal(res.status, 400)
-  assert.match((await res.json()).error.message, /no se comunica a PMKT/)
+  assert.equal(res.status, 422)
+  const body = await res.json()
+  assert.equal(body.status, 'failed')
+  assert.equal(body.error.code, 'TIPO_NO_APLICA')
+  assert.match(body.error.message, /no se comunica/)
 
   const bad = await send(notify, t, 'POST', `/api/v1/records/${mejora.id}/notify-pmkt`, { confirm: 'true' })
   assert.equal(bad.status, 400)
 
   assert.equal((await send(notify, t, 'POST', '/api/v1/records/no-existe/notify-pmkt', {})).status, 404)
-  assert.equal(await prisma.auditLog.count({ where: { action: 'NOTIFIED_PMKT' } }), 0)
+  assert.equal(await prisma.auditLog.count({ where: { action: { in: ['NOTIFIED_PMKT', 'EMAIL_SENT'] } } }), 0)
 })
 
 test('caracteres NUL: id, body (crudo y escapado) y query se rechazan con 4xx, nunca 500', async () => {

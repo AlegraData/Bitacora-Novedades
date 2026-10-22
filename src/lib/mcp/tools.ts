@@ -2,7 +2,8 @@ import { prisma } from '@/lib/prisma'
 import type { Prisma } from '@/generated/prisma'
 import { addAuditLog } from '@/lib/actions/audit'
 import { updateRecordEmbedding, searchSimilarRecords } from '@/lib/actions/ai'
-import { notifyPmktForRecord } from '@/lib/actions/pmkt'
+import { sendNovedad, type SendActor, type SendResult } from '@/lib/email/service'
+import { toClientResult } from '@/lib/email/public'
 import { loadFieldMap, mapRecordData, buildDataPatch } from './fields'
 import type { Caller } from './auth'
 
@@ -80,7 +81,7 @@ export const TOOLS = [
   },
   {
     name: 'create_record',
-    description: 'Crea una nueva novedad. Solo 4 campos son obligatorios; el resto puede completarse después con update_record.',
+    description: 'Crea una nueva novedad. Solo 4 campos son obligatorios; el resto puede completarse después con update_record. La respuesta incluye "email": el resultado del envío automático (status sent | skipped | failed y el motivo, con missingFields si falta algo para comunicar).',
     inputSchema: {
       type: 'object',
       required: ['tipo', 'titulo', 'fechaLanzamiento', 'elaborado'],
@@ -220,11 +221,12 @@ export const TOOLS = [
     name: 'notify_pmkt',
     description:
       'Fallback MANUAL (TMDIAPD-16): toda novedad/pre-novedad se comunica a PMKT automáticamente en cuanto tiene los campos obligatorios completos — normalmente NO hace falta llamar a este tool. ' +
-      'Úsalo solo para reintentar un envío que falló (ej. el webhook externo estuvo caído) o para depurar por qué un registro no se ha comunicado. ' +
-      'Dispara el envío: notifica al canal de Google Chat y envía correo a los destinatarios de "Correos a comunicar". Solo aplica a tipo Novedad / Pre-novedad. ' +
-      'Antes de enviar valida que título, breve descripción, fecha de lanzamiento, fecha real de producción, responsables y al menos un destinatario con formato de correo válido estén completos; si falta alguno, devuelve la lista exacta de campos faltantes sin enviar nada. ' +
-      'Flujo en dos pasos: llamar SIN "confirm" primero devuelve un preview (asunto, destinatarios, campos que se incluirán) sin enviar nada; hay que mostrárselo al usuario y volver a llamar con "confirm: true" para disparar el envío real. ' +
-      'Solo queda marcado como comunicado (y bloqueado para reenvío) si el correo realmente se envió.',
+      'Úsalo solo para reintentar un envío que falló o para depurar por qué un registro no se ha comunicado. ' +
+      'Envía el correo a los destinatarios de "Correos a comunicar" (y avisa al canal de Google Chat). Solo aplica a tipo Novedad / Pre-novedad. ' +
+      'Antes de enviar valida que título, breve descripción, fecha de lanzamiento, fecha real de producción, responsables y al menos un destinatario con formato de correo válido estén completos; si falta alguno, devuelve error.missingFields con la lista exacta, sin enviar nada. ' +
+      'Flujo en dos pasos: llamar SIN "confirm" devuelve un simulacro (asunto, destinatarios y texto exactos del correo) sin enviar nada; hay que mostrárselo al usuario y volver a llamar con "confirm: true" para el envío real. ' +
+      'La respuesta siempre trae status (sent | simulated | failed | skipped) y, si falló, error.code y error.message con el motivo (ej. DUPLICATE, VALIDATION, SMTP_AUTH, RECIPIENT_REJECTED, RATE_LIMIT, SMTP_NOT_CONFIGURED). ' +
+      'Una novedad ya enviada no se reenvía: solo un ADMIN puede forzarlo con "resend: true" y un "reason".',
     inputSchema: {
       type: 'object',
       required: ['recordId'],
@@ -232,8 +234,10 @@ export const TOOLS = [
         recordId: { type: 'string', description: 'ID de la novedad a comunicar' },
         confirm: {
           type: 'boolean',
-          description: 'Debe ser true para disparar el envío real. Sin este parámetro (o en false) solo se valida y se devuelve un preview, sin enviar nada.',
+          description: 'Debe ser true para disparar el envío real. Sin este parámetro (o en false) solo se simula y se devuelve el preview, sin enviar nada.',
         },
+        resend: { type: 'boolean', description: 'Solo ADMIN: reenviar una novedad que ya se comunicó. Requiere "reason".' },
+        reason: { type: 'string', description: 'Motivo del reenvío (obligatorio con resend: true).' },
       },
     },
   },
@@ -373,13 +377,10 @@ export async function handleCreateRecord(args: Record<string, unknown>, caller: 
     console.error('Error al generar embedding (create_record):', e)
   )
 
-  notifyPmktForRecord(record.id, {
-    mode: 'auto',
-    triggeredBy: { id: caller.id, email: caller.email, name: caller.name },
-  }).catch((e) => console.error('[pmkt] auto-notify falló (create_record):', e))
+  const email = await autoSend(record.id, caller)
 
   const map = await loadFieldMap()
-  return { ...recordBase(record), ...mapRecordData(record.data as Record<string, unknown>, map) }
+  return { ...recordBase(record), ...mapRecordData(record.data as Record<string, unknown>, map), email }
 }
 
 export async function handleUpdateRecord(args: Record<string, unknown>, caller: Caller): Promise<ToolResult> {
@@ -434,12 +435,9 @@ export async function handleUpdateRecord(args: Record<string, unknown>, caller: 
     console.error('Error al generar embedding (update_record):', e)
   )
 
-  notifyPmktForRecord(record.id, {
-    mode: 'auto',
-    triggeredBy: { id: caller.id, email: caller.email, name: caller.name },
-  }).catch((e) => console.error('[pmkt] auto-notify falló (update_record):', e))
+  const email = await autoSend(record.id, caller)
 
-  return { ...recordBase(record), ...mapRecordData(record.data as Record<string, unknown>, map) }
+  return { ...recordBase(record), ...mapRecordData(record.data as Record<string, unknown>, map), email }
 }
 
 export async function handleDeleteRecord(args: Record<string, unknown>, caller: Caller): Promise<ToolResult> {
@@ -467,15 +465,43 @@ export async function handleNotifyPmkt(args: Record<string, unknown>, caller: Ca
   const recordId = String(args.recordId ?? '')
   if (!recordId) return { error: 'El campo "recordId" es obligatorio.' }
 
-  // TMDIAPD-16: el disparo normal ahora es automático (ver notifyPmktForRecord
-  // llamado desde handleCreateRecord/handleUpdateRecord). Este tool queda como
-  // fallback manual — por ejemplo si el envío automático falló y hay que
-  // reintentar, o para depurar por qué un registro no se comunicó.
-  return notifyPmktForRecord(recordId, {
-    mode: 'manual',
-    confirm: args.confirm === true,
-    triggeredBy: { id: caller.id, email: caller.email, name: caller.name },
+  // TMDIAPD-16: el disparo normal es automático (ver autoSend en create/update). Este tool es el
+  // fallback manual: reintentar un envío que falló, simular, o depurar por qué no se comunicó.
+  // Sin confirm:true solo simula (preview del correo exacto); con confirm:true envía de verdad.
+  const real = args.confirm === true
+  const resend = args.resend === true ? { reason: String(args.reason ?? '') } : undefined
+  const result = await sendNovedad({
+    recordId,
+    actor: actorOf(caller),
+    channel: caller.via ? 'api' : 'mcp',
+    trigger: 'manual',
+    simulate: !real,
+    resend,
   })
+  const shaped = toClientResult(result, caller.role, { text: !real })
+  if (real) return { ...shaped }
+  return {
+    preview: true,
+    ...shaped,
+    instrucciones: 'Esto es un simulacro: no se envió nada. Revisa asunto, destinatarios y texto; para enviar de verdad vuelve a llamar con confirm: true.',
+  }
+}
+
+function actorOf(caller: Caller): SendActor {
+  return { id: caller.id, email: caller.email, name: caller.name, role: caller.role }
+}
+
+/** Envío automático tras crear/editar: se espera el resultado y se devuelve; nunca hace fallar la escritura. */
+async function autoSend(recordId: string, caller: Caller): Promise<SendResult> {
+  try {
+    return toClientResult(
+      await sendNovedad({ recordId, actor: actorOf(caller), channel: caller.via ? 'api' : 'mcp', trigger: 'auto' }),
+      caller.role
+    )
+  } catch (e) {
+    console.error('[email] auto-envío falló:', e)
+    return { ok: false, status: 'failed', error: { code: 'UNKNOWN', message: 'No se pudo procesar el envío automático.' } }
+  }
 }
 
 export async function handleListAuditLog(args: Record<string, unknown>): Promise<ToolResult> {

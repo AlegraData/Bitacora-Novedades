@@ -94,8 +94,8 @@ export const ENDPOINTS: Endpoint[] = [
     params: [idParam], example: `curl -X DELETE -H "Authorization: Bearer $TOKEN" ${API_BASE_URL}/records/<id>`,
   },
   {
-    method: 'POST', path: '/records/{id}/notify-pmkt', scope: 'pmkt:notify', summary: 'Fallback manual de la comunicación a PMKT. Sin confirm:true solo devuelve un preview.', mcpTool: 'notify_pmkt',
-    params: [idParam, { name: 'confirm', in: 'body', type: 'boolean', description: 'true para enviar de verdad.' }],
+    method: 'POST', path: '/records/{id}/notify-pmkt', scope: 'pmkt:notify', summary: 'Fallback manual de la comunicación por correo. Sin confirm:true solo simula (devuelve el correo exacto, no envía). La respuesta trae status (sent | simulated | failed | skipped) y, si falló, error.code con el motivo; el estado HTTP depende del código (409 duplicado, 422 faltan datos, 502 fallo del servidor de correo, 503 sin configurar).', mcpTool: 'notify_pmkt',
+    params: [idParam, { name: 'confirm', in: 'body', type: 'boolean', description: 'true para enviar de verdad.' }, { name: 'resend', in: 'body', type: 'boolean', description: 'Solo ADMIN: reenviar algo ya comunicado (requiere reason).' }, { name: 'reason', in: 'body', type: 'string', description: 'Motivo del reenvío.' }],
     example: `curl -X POST -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \\\n  -d '{"confirm":false}' ${API_BASE_URL}/records/<id>/notify-pmkt`,
   },
   {
