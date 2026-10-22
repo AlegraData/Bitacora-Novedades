@@ -42,7 +42,7 @@ export async function postRecordToWebhook(params: {
   fieldMap: Map<string, string>
   config: ButtonConfig
   triggeredBy: string
-}): Promise<void> {
+}): Promise<{ status: number; body: string }> {
   const namedData = buildNamedData(params.recordData, params.fieldMap, params.config)
 
   const response = await fetch(params.webhookUrl, {
@@ -59,6 +59,10 @@ export async function postRecordToWebhook(params: {
   if (!response.ok) {
     throw new Error(`El endpoint respondió con error ${response.status}: ${response.statusText}`)
   }
+  // El Apps Script responde 200 {"status":"success"} aunque su pipeline haya fallado por dentro;
+  // se devuelve el cuerpo para dejarlo en el historial y poder comparar.
+  const body = (await response.text().catch(() => '')).slice(0, 500)
+  return { status: response.status, body }
 }
 
 export async function triggerButtonWebhook(
