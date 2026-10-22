@@ -89,7 +89,7 @@ function auditBase(actor: SendActor) {
   return { userId: actor.id, userEmail: actor.email, userName: actor.name ?? actor.email }
 }
 
-async function findWebhookButton(): Promise<{ config: ButtonConfig; fieldMap: Map<string, string> } | null> {
+export async function findWebhookButton(): Promise<{ config: ButtonConfig; fieldMap: Map<string, string> } | null> {
   const button = await prisma.field.findFirst({ where: { type: 'button' } })
   const config = button?.config as ButtonConfig | null
   if (!config || config.action !== 'webhook' || !config.webhookUrl) return null
