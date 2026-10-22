@@ -9,7 +9,7 @@ import { getSettings, type DeliveryMode } from './settings'
 import { getActiveTemplate } from './template-store'
 import { renderEmail, TemplateError, type RenderedEmail } from './render'
 import { buildVariables, type EmailVariables } from './variables'
-import { getSmtpConfig, parseRecipients, sendMail, smtpStatus, MAX_RECIPIENTS } from './transport'
+import { getSmtpConfig, sendMail, smtpStatus, MAX_RECIPIENTS } from './transport'
 import { sendChatCard } from './chat'
 import { evaluateCommunication, COMMUNICATION_SINCE, BASE_REQUIRED_FIELDS } from './communication'
 
@@ -148,8 +148,11 @@ export async function sendNovedad(opts: SendOptions): Promise<SendResult> {
 
   // Validación: obligatorios para todos los tipos + «¿Trae video?» (y Video si es Sí).
   const missingFields = evaluateCommunication(logical, { traeVideoConfigured: map.has('traeVideo') }).missing
-  const { valid: recipients, invalid } = parseRecipients(logical.correosAComunicar)
-  if (recipients.length === 0) missingFields.push('Correos a comunicar (mínimo un destinatario con formato de correo válido)')
+  // Destinatarios: SOLO los configurados en el admin (TMDIAPD-56). «Correos a comunicar» es informativo.
+  const settings = await getSettings()
+  const notify = settings.recipients
+  const recipients = notify.map((r) => r.email)
+  const invalid: string[] = []
   if (missingFields.length > 0) {
     // En auto es un estado normal y transitorio (aún no se llenan todos los campos).
     return auto
@@ -160,7 +163,6 @@ export async function sendNovedad(opts: SendOptions): Promise<SendResult> {
     return failure('VALIDATION', `Hay ${recipients.length} destinatarios; el máximo es ${MAX_RECIPIENTS}.`)
   }
 
-  const settings = await getSettings()
   const template = await getActiveTemplate()
   const vars = buildVariables(logical, opts.recordId)
   let rendered: RenderedEmail

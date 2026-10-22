@@ -42,18 +42,18 @@ const server = async (init?: { status: number; body: string }) => {
   return s
 }
 
-test('modo live: envía por SMTP a los destinatarios del formulario, registra y audita', async () => {
+test('modo live: envía por SMTP a los destinatarios de la notificación, registra y audita', async () => {
   const r = await makeRecord()
   const res = await send(r.id)
   assert.equal(res.ok, true)
   assert.equal(res.status, 'sent')
   assert.equal(res.mode, 'live')
-  assert.deepEqual(res.recipients?.sort(), ['dest1@alegra.com', 'dest2@alegra.com'])
+  assert.deepEqual(res.recipients?.sort(), ['cristian.albornoz@alegra.com', 'cristian.bautista@alegra.com', 'valentina.garcia@alegra.com'])
 
   const [m] = await listMessages()
   const mail = await getMessage(m.ID)
   assert.equal(mail.Subject, 'Novedad | Alegra POS - Facturación masiva')
-  assert.deepEqual(mail.To.map((t) => t.Address).sort(), ['dest1@alegra.com', 'dest2@alegra.com'])
+  assert.deepEqual(mail.To.map((t) => t.Address).sort(), ['cristian.albornoz@alegra.com', 'cristian.bautista@alegra.com', 'valentina.garcia@alegra.com'])
   assert.match(mail.HTML, /Ahora puedes facturar en lote\./)
 
   const d = await prisma.emailDelivery.findUniqueOrThrow({ where: { id: res.deliveryId } })
@@ -129,29 +129,28 @@ test('reenvío: solo ADMIN y con motivo; el envío anterior queda en el historia
 })
 
 test('validación: manual lista exactamente qué falta; auto se omite en silencio; nunca sale correo ni se toma lock', async () => {
-  const r = await makeRecord({ responsables: [], fechaProduccion: undefined, correosAComunicar: ['no-es-correo'] })
+  const r = await makeRecord({ responsables: [], fechaProduccion: undefined })
   const manual = await send(r.id)
   assert.equal(manual.error?.code, 'VALIDATION')
-  assert.deepEqual(manual.error?.missingFields?.sort(), [
-    'Correos a comunicar (mínimo un destinatario con formato de correo válido)',
-    'Fecha real de producción',
-    'Responsables',
-  ])
-  assert.deepEqual(manual.error?.invalidRecipients, ['no-es-correo'])
+  assert.deepEqual(manual.error?.missingFields?.sort(), ['Fecha real de producción', 'Responsables'])
   const auto = await send(r.id, { trigger: 'auto' })
   assert.equal(auto.status, 'skipped')
   assert.equal(auto.skippedReason, 'campos_incompletos')
-  assert.equal(auto.missingFields?.length, 3)
+  assert.equal(auto.missingFields?.length, 2)
   assert.equal((await listMessages()).length, 0)
   assert.equal(await prisma.emailDelivery.count(), 0)
 })
 
-test('destinatarios inválidos: se envía a los válidos y se avisa cuáles se omitieron', async () => {
-  const r = await makeRecord({ correosAComunicar: ['ok@alegra.com', 'mal-escrito', 'otro@alegra.com'] })
-  const res = await send(r.id)
-  assert.equal(res.status, 'sent')
-  assert.deepEqual(res.recipients?.sort(), ['ok@alegra.com', 'otro@alegra.com'])
-  assert.match(res.warnings![0], /mal-escrito/)
+test('«Correos a comunicar» (vacío, inválido o con otros) es informativo: no bloquea ni cambia a quién se envía', async () => {
+  for (const correos of [[], ['mal-escrito'], ['ok@alegra.com', 'tm-alegra@alegra.com']]) {
+    await clearMailbox()
+    await prisma.emailDelivery.deleteMany()
+    const r = await makeRecord({ correosAComunicar: correos })
+    const res = await send(r.id)
+    assert.equal(res.status, 'sent', JSON.stringify(correos))
+    assert.deepEqual(res.recipients?.sort(), ['cristian.albornoz@alegra.com', 'cristian.bautista@alegra.com', 'valentina.garcia@alegra.com'])
+    assert.equal(res.warnings?.length ?? 0, 0)
+  }
 })
 
 test('todos los tipos se comunican (TMDIAPD-56): ya no hay tipos que no apliquen', async () => {

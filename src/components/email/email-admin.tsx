@@ -3,6 +3,7 @@
 import { useEffect, useState, useTransition } from 'react'
 import type { AdminState } from '@/lib/email/admin'
 import type { DeliveryMode } from '@/lib/email/settings'
+import type { NotifyRecipient } from '@/lib/email/recipients'
 import { getEmailAdminState, saveEmailSettings, verifyEmailConnection } from '@/lib/actions/email-admin'
 import { TemplateEditor } from './template-editor'
 import { TestTools } from './test-tools'
@@ -83,18 +84,20 @@ export function SettingsPanel({ state, onChange }: { state: AdminState; onChange
   const [fromName, setFromName] = useState(settings.fromName)
   const [replyTo, setReplyTo] = useState(settings.replyTo ?? '')
   const [tests, setTests] = useState(settings.testRecipients.join(', '))
+  const [rows, setRows] = useState<NotifyRecipient[]>(settings.recipients)
+  const [newEmail, setNewEmail] = useState('')
   const [message, setMessage] = useState<{ ok: boolean; text: string } | null>(null)
   const [verify, setVerify] = useState<{ ok: boolean; text: string; detail?: string } | 'loading' | null>(null)
   const [pending, startTransition] = useTransition()
 
   const dirty =
-    mode !== settings.mode || fromName !== settings.fromName || replyTo !== (settings.replyTo ?? '') || tests !== settings.testRecipients.join(', ')
+    mode !== settings.mode || fromName !== settings.fromName || replyTo !== (settings.replyTo ?? '') || tests !== settings.testRecipients.join(', ') || JSON.stringify(rows) !== JSON.stringify(settings.recipients)
 
   function save() {
     if (mode !== settings.mode && mode === 'live' &&
       !window.confirm('A partir de ahora los correos de las novedades saldrán por SMTP a los destinatarios reales. ¿Continuar?')) return
     startTransition(async () => {
-      const res = await saveEmailSettings({ mode, fromName, replyTo: replyTo.trim() || null, testRecipients: tests })
+      const res = await saveEmailSettings({ mode, fromName, replyTo: replyTo.trim() || null, testRecipients: tests, recipients: rows })
       if (res.ok) {
         onChange(res.data)
         setMessage({ ok: true, text: 'Guardado.' })
@@ -138,6 +141,37 @@ export function SettingsPanel({ state, onChange }: { state: AdminState; onChange
       </div>
 
       <div style={card}>
+        <h3 style={{ fontSize: 15, fontWeight: 700, color: '#1a202c', marginBottom: 4 }}>Destinatarios de la notificación</h3>
+        <p style={{ fontSize: 12, color: '#64748b', marginBottom: 10 }}>
+          El correo de cada novedad se envía <b>solo</b> a estas personas (ya no a «Correos a comunicar» del registro). Si agregas su ID de Chat, la tarjeta del canal las menciona.
+          {!settings.recipientsCustomized && ' Ahora se usa la lista por defecto; al guardar queda como tuya.'}
+          {' '}En los modos Apps Script y Sombra el script sigue enviando a «Correos a comunicar»: esta lista aplica en En vivo.
+        </p>
+        <div style={{ display: 'grid', gap: 6, marginBottom: 8 }}>
+          {rows.map((r, i) => (
+            <div key={r.email} style={{ display: 'grid', gridTemplateColumns: 'minmax(180px, 1.4fr) minmax(140px, 1fr) minmax(170px, 1fr) auto', gap: 6, alignItems: 'center' }}>
+              <span style={{ fontSize: 13, color: '#1e293b', wordBreak: 'break-all' }}>{r.email}</span>
+              <input value={r.name ?? ''} placeholder="Nombre" maxLength={80} onChange={(e) => setRows(rows.map((x, j) => (j === i ? { ...x, name: e.target.value } : x)))} style={inputStyle} />
+              <input value={r.chatUserId ?? ''} placeholder="ID de Chat (opcional)" inputMode="numeric" onChange={(e) => setRows(rows.map((x, j) => (j === i ? { ...x, chatUserId: e.target.value.replace(/[^0-9]/g, '') || undefined } : x)))} style={{ ...inputStyle, fontFamily: 'monospace' }} />
+              <button onClick={() => setRows(rows.filter((_, j) => j !== i))} disabled={rows.length <= 1} title={rows.length <= 1 ? 'Debe quedar al menos uno' : 'Quitar'} style={{ ...btn, padding: '5px 10px', opacity: rows.length <= 1 ? 0.4 : 1 }}>✕</button>
+            </div>
+          ))}
+        </div>
+        <div style={{ display: 'flex', gap: 6, marginBottom: 18 }}>
+          <input value={newEmail} onChange={(e) => setNewEmail(e.target.value)} placeholder="agregar.correo@alegra.com" style={inputStyle} />
+          <button
+            onClick={() => {
+              const email = newEmail.trim().toLowerCase()
+              if (email && !rows.some((r) => r.email === email)) setRows([...rows, { email }])
+              setNewEmail('')
+            }}
+            disabled={!newEmail.trim()}
+            style={{ ...btn, whiteSpace: 'nowrap', opacity: newEmail.trim() ? 1 : 0.5 }}
+          >
+            Agregar
+          </button>
+        </div>
+
         <h3 style={{ fontSize: 15, fontWeight: 700, color: '#1a202c', marginBottom: 10 }}>Remitente y pruebas</h3>
         <div style={{ display: 'grid', gap: 12, gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))' }}>
           <label style={{ fontSize: 12, color: '#64748b' }}>Nombre visible del remitente

@@ -185,14 +185,16 @@ model ApiRequestLog {
 
 // Configuración global del envío de correos (una sola fila).
 model EmailSettings {
-  id             String   @id @default("singleton")
+  id               String   @id @default("singleton")
   // webhook = Apps Script legado | shadow = legado envía + la app simula | test = SMTP solo a testRecipients | live = SMTP real
-  mode           String   @default("webhook")
-  fromName       String   @default("Alegra Product News")
-  replyTo        String?
-  testRecipients String[]
-  updatedAt      DateTime @updatedAt
-  updatedByEmail String?
+  mode             String   @default("webhook")
+  fromName         String   @default("Alegra Product News")
+  replyTo          String?
+  testRecipients   String[]
+  // Destinatarios de la notificación: [{ email, name?, chatUserId? }]. null = los de por defecto (ver recipients.ts).
+  notifyRecipients Json?
+  updatedAt        DateTime @updatedAt
+  updatedByEmail   String?
 }
 
 // Plantilla activa del correo (Handlebars). Cada guardado deja una revisión.

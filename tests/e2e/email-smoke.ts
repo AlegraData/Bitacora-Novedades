@@ -45,7 +45,7 @@ async function mcp(token: string, name: string, args: Record<string, unknown>) {
 const complete = {
   tipo: 'Novedad', titulo: 'Facturación masiva', breveDescripcion: 'Ahora puedes facturar en lote.', fechaLanzamiento: '2026-11-01',
   fechaProduccion: '2026-11-05', responsables: ['ana@alegra.com'], correosAComunicar: ['dest1@alegra.com', 'dest2@alegra.com'],
-  elaborado: 'viewer@alegra.com', producto: ['Alegra POS'],
+  elaborado: 'viewer@alegra.com', producto: ['Alegra POS'], traeVideo: 'No',
 }
 
 async function main() {
@@ -84,7 +84,8 @@ async function main() {
     assert.equal(msgs.length, 1)
     const mail = await getMessage(msgs[0].ID)
     assert.equal(mail.Subject, 'Novedad | Alegra POS - Facturación masiva')
-    assert.deepEqual(mail.To.map((t) => t.Address).sort(), ['dest1@alegra.com', 'dest2@alegra.com'])
+    assert.deepEqual(mail.To.map((t) => t.Address).sort(), ['cristian.albornoz@alegra.com', 'cristian.bautista@alegra.com', 'valentina.garcia@alegra.com'])
+    assert.ok(!JSON.stringify(mail.To).includes('dest1@alegra.com'), 'solo los destinatarios de la notificación, no los del registro')
     assert.equal(mail.From.Name, 'Alegra Product News')
     assert.ok(mail.Text.includes(`https://bitacora.test/app?record=${recordId}`))
     assert.match(mail.HTML, /Ahora puedes facturar en lote/)
