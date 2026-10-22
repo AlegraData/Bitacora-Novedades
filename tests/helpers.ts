@@ -1,12 +1,10 @@
 import { prisma } from '@/lib/prisma'
+import { LOGICAL_FIELD_NAMES } from '@/lib/mcp/fields'
 
 export async function resetDb() {
   await prisma.$executeRawUnsafe(
-    'TRUNCATE TABLE "ApiRequestLog", "ApiKey", "AuditLog", "RecordEmbedding", "Record", "User" RESTART IDENTITY CASCADE'
-  ).catch(async () => {
-    // Antes de que existan las tablas de API (commits iniciales).
-    await prisma.$executeRawUnsafe('TRUNCATE TABLE "AuditLog", "RecordEmbedding", "Record", "User" RESTART IDENTITY CASCADE')
-  })
+    'TRUNCATE TABLE "EmailDelivery", "EmailTemplateRevision", "EmailTemplate", "EmailSettings", "ApiRequestLog", "ApiKey", "AuditLog", "RecordEmbedding", "Record", "User" RESTART IDENTITY CASCADE'
+  )
 }
 
 export async function makeUser(email: string, role: 'ADMIN' | 'MANAGER' | 'VIEWER' = 'VIEWER') {
@@ -16,8 +14,6 @@ export async function makeUser(email: string, role: 'ADMIN' | 'MANAGER' | 'VIEWE
     create: { email, name: email.split('@')[0], role },
   })
 }
-
-import { LOGICAL_FIELD_NAMES } from '@/lib/mcp/fields'
 
 const FIELD_TYPES: Record<string, { type: string; options?: string[] }> = {
   tipo: { type: 'select', options: ['Novedad', 'Pre-novedad', 'Mejora'] },

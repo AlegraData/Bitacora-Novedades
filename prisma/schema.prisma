@@ -182,3 +182,72 @@ model ApiRequestLog {
 
   @@index([apiKeyId, timestamp])
 }
+
+// Configuración global del envío de correos (una sola fila).
+model EmailSettings {
+  id             String   @id @default("singleton")
+  // webhook = Apps Script legado | shadow = legado envía + la app simula | test = SMTP solo a testRecipients | live = SMTP real
+  mode           String   @default("webhook")
+  fromName       String   @default("Alegra Product News")
+  replyTo        String?
+  testRecipients String[]
+  updatedAt      DateTime @updatedAt
+  updatedByEmail String?
+}
+
+// Plantilla activa del correo (Handlebars). Cada guardado deja una revisión.
+model EmailTemplate {
+  id             String   @id @default(cuid())
+  key            String   @unique
+  subject        String
+  html           String
+  version        Int      @default(1)
+  updatedAt      DateTime @updatedAt
+  updatedByEmail String?
+}
+
+model EmailTemplateRevision {
+  id           String   @id @default(cuid())
+  templateKey  String
+  version      Int
+  subject      String
+  html         String
+  savedByEmail String?
+  createdAt    DateTime @default(now())
+
+  @@index([templateKey, version])
+}
+
+// Un intento de envío (real, de prueba o simulado). `lockKey` es único mientras
+// el envío está en curso o ya se completó: garantiza una sola comunicación por
+// novedad aunque dos personas disparen a la vez. Se libera (null) si falla.
+model EmailDelivery {
+  id               String    @id @default(cuid())
+  recordId         String?
+  kind             String    @default("novedad")
+  mode             String // webhook | shadow | test | live | simulate | legacy
+  status           String // sending | sent | failed | simulated
+  lockKey          String?   @unique
+  subject          String?
+  recipients       String[]
+  rejected         String[]
+  html             String?
+  channel          String // web | mcp | api | admin
+  trigger          String // auto | manual | button | test | simulate
+  triggeredByEmail String
+  triggeredByName  String?
+  resendReason     String?
+  errorCode        String?
+  errorMessage     String?
+  errorDetail      String?
+  messageId        String?
+  legacyResponse   String?
+  chatStatus       String? // sent | failed
+  chatError        String?
+  createdAt        DateTime  @default(now())
+  finishedAt       DateTime?
+  durationMs       Int?
+
+  @@index([recordId, createdAt])
+  @@index([status, createdAt])
+}
