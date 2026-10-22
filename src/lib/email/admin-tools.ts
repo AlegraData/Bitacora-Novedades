@@ -160,3 +160,52 @@ export async function shadowComparison(limit = 50): Promise<ShadowComparison> {
     rows: list,
   }
 }
+
+// ---------------- Chat: resolver IDs y mensaje de prueba ----------------
+
+import { resolveChatUsers, itHubConfigured, type ResolvedUser } from './it-hub'
+import { sendChatMentionTest } from './chat'
+import { ensureChatIds, toMentions } from './chat-ids'
+
+/** Para el botón «Resolver IDs de Chat»: consulta el IT Hub y devuelve lo encontrado (la pantalla decide qué guardar). */
+export async function resolveIdsForAdmin(emails: unknown): Promise<ResolvedUser[]> {
+  const { valid } = parseRecipients(emails)
+  return resolveChatUsers(valid.slice(0, 20))
+}
+
+export interface ChatTestResult {
+  ok: boolean
+  /** A qué webhook se publicó: un espacio de pruebas o el canal real. */
+  target: 'prueba' | 'produccion' | 'ninguno'
+  mentioned: string[]
+  unresolved: { email: string; error?: string }[]
+  error?: string
+}
+
+/**
+ * Publica un mensaje de prueba mencionando a los destinatarios de la notificación (completando los IDs que falten).
+ * Si hay PMKT_CHAT_TEST_WEBHOOK_URL va a ese espacio de pruebas; si no, al canal real (¡notifica a esas personas!).
+ */
+export async function sendChatTest(actor: SettingsActor): Promise<ChatTestResult> {
+  const rl = testLimiter.hit(`chat:${actor.email}`)
+  if (!rl.allowed) {
+    return { ok: false, target: 'ninguno', mentioned: [], unresolved: [], error: `Máximo ${rl.limit} mensajes de prueba por hora. Intenta en ${Math.ceil(rl.retryAfterSec / 60)} min.` }
+  }
+  const settings = await getSettings()
+  const { recipients, unresolved } = await ensureChatIds(settings.recipients)
+  const result = await sendChatMentionTest(toMentions(recipients))
+
+  await addAuditLog({
+    userId: actor.id, userEmail: actor.email, userName: actor.name ?? actor.email, action: 'EMAIL_CHAT_TEST',
+    details: { target: result.target, status: result.status, mentioned: recipients.filter((r) => r.chatUserId).length, unresolved: unresolved.length },
+  })
+  return {
+    ok: result.status === 'sent',
+    target: result.target,
+    mentioned: recipients.filter((r) => r.chatUserId).map((r) => r.name ?? r.email),
+    unresolved: unresolved.map((u) => ({ email: u.email, error: u.error })),
+    ...(result.status === 'failed' ? { error: result.error } : result.status === 'skipped' ? { error: 'No hay webhook de Chat configurado (PMKT_CHAT_WEBHOOK_URL).' } : {}),
+  }
+}
+
+export { itHubConfigured }

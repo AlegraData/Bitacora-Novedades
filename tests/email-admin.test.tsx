@@ -92,7 +92,8 @@ test('guardia: toda acción de servidor de correo-admin exige ADMIN antes de hac
 const baseState = (over: Record<string, unknown> = {}) => ({
   settings: { mode: 'webhook', fromName: 'Alegra Product News', replyTo: null, testRecipients: [], recipients: [{ email: 'cristian.albornoz@alegra.com', name: 'Cristian Albornoz Arias' }, { email: 'valentina.garcia@alegra.com' }], recipientsCustomized: false, updatedAt: null, updatedByEmail: null },
   smtp: { configured: false, host: null, port: 587, user: 'data.news@alegra.com', fromEmail: 'data.news@alegra.com', hasPassword: false, missing: ['SMTP_HOST', 'SMTP_PASS'] },
-  chat: { configured: true, host: 'chat.googleapis.com' },
+  chat: { configured: true, host: 'chat.googleapis.com', testWebhookConfigured: false },
+  itHub: { configured: true },
   webhook: { configured: true },
   modes: [{ id: 'webhook', label: 'a' }, { id: 'shadow', label: 'b' }, { id: 'test', label: 'c' }, { id: 'live', label: 'd' }],
   limits: { maxTestRecipients: 5, testDomains: ['alegra.com'] },

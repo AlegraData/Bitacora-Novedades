@@ -11,6 +11,8 @@ import { renderEmail, TemplateError, type RenderedEmail } from './render'
 import { buildVariables, type EmailVariables } from './variables'
 import { getSmtpConfig, sendMail, smtpStatus, MAX_RECIPIENTS } from './transport'
 import { sendChatCard } from './chat'
+import { ensureChatIds, toMentions } from './chat-ids'
+import type { NotifyRecipient } from './recipients'
 import { evaluateCommunication, COMMUNICATION_SINCE, BASE_REQUIRED_FIELDS } from './communication'
 
 // TMDIAPD-56: se comunican TODOS los tipos de novedad. El envío automático solo aplica a registros
@@ -94,6 +96,8 @@ interface Ctx {
   raw: { id: string; data: unknown; createdAt: Date }
   logical: Logical
   recipients: string[]
+  /** Destinatarios de la notificación con nombre e ID de Chat (para las menciones). */
+  notify: NotifyRecipient[]
   invalid: string[]
   vars: EmailVariables
   rendered: RenderedEmail
@@ -174,7 +178,7 @@ export async function sendNovedad(opts: SendOptions): Promise<SendResult> {
   }
 
   const warnings = invalid.length ? [`Se omitieron direcciones con formato inválido: ${invalid.join(', ')}`] : []
-  const ctx: Ctx = { opts, started, raw, logical, recipients, invalid, vars, rendered, warnings }
+  const ctx: Ctx = { opts, started, raw, logical, recipients, notify, invalid, vars, rendered, warnings }
 
   // ---- Simulacro: el correo exacto, sin enviar ni bloquear nada ----
   if (opts.simulate) {
@@ -332,7 +336,9 @@ async function runReal(ctx: Ctx, mode: 'live' | 'webhook' | 'shadow', fromName: 
       rejected = sent.rejected
       messageId = sent.messageId
       // La tarjeta de Chat la publica la app solo en vivo; en webhook/shadow la sigue publicando el Apps Script.
-      const c = await sendChatCard({ elaborado: ctx.vars.elaborado, titulo: ctx.vars.titulo, tipo: ctx.vars.tipo, url: ctx.vars.url })
+      // Menciona a los destinatarios en la tarjeta; completa los IDs que falten consultando el IT Hub.
+      const { recipients: withIds } = await ensureChatIds(ctx.notify)
+      const c = await sendChatCard({ elaborado: ctx.vars.elaborado, titulo: ctx.vars.titulo, tipo: ctx.vars.tipo, url: ctx.vars.url }, toMentions(withIds))
       chat = c.status
       await prisma.emailDelivery.update({ where: { id: delivery.id }, data: { chatStatus: c.status, chatError: c.status === 'failed' ? c.error : null } })
     } else {
