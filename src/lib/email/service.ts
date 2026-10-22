@@ -241,17 +241,42 @@ async function runTest(ctx: Ctx, testRecipients: string[], fromName: string, rep
 
 // ---------- modos real (live) y legado (webhook / shadow): con lock atómico ----------
 
+/**
+ * ¿Ya se comunicó esta novedad con la versión anterior de la app? Tres rastros posibles:
+ * - NOTIFIED_PMKT: el envío automático / notify_pmkt.
+ * - WEBHOOK_TRIGGERED: el botón "Enviar email" (nunca escribía NOTIFIED_PMKT).
+ * - La fecha en el campo del botón: es lo que la pantalla muestra como "✅ Sí".
+ */
+export async function findLegacySend(ctx: Pick<Ctx, 'raw' | 'opts'>): Promise<{ deliveryId: string; sentAt: string | null; by: string } | null> {
+  const audit = await prisma.auditLog.findFirst({
+    where: { recordId: ctx.opts.recordId, action: { in: ['NOTIFIED_PMKT', 'WEBHOOK_TRIGGERED'] } },
+    orderBy: { timestamp: 'asc' },
+  })
+  if (audit) return { deliveryId: `legacy:${audit.id}`, sentAt: audit.timestamp.toISOString(), by: audit.userEmail }
+
+  const buttons = await prisma.field.findMany({ where: { type: 'button' }, select: { id: true } })
+  const data = ctx.raw.data as Record<string, unknown>
+  for (const b of buttons) {
+    const v = data[b.id]
+    if (typeof v === 'string' && v.trim()) {
+      const at = new Date(v)
+      return { deliveryId: 'legacy:button', sentAt: Number.isNaN(at.getTime()) ? null : at.toISOString(), by: 'el botón «Enviar email»' }
+    }
+  }
+  return null
+}
+
 async function acquireLock(ctx: Ctx, mode: string): Promise<{ delivery: { id: string } } | SendResult> {
   const { opts } = ctx
   const lockKey = `novedad:${opts.recordId}`
   const data = { mode, status: 'sending', lockKey, recipients: ctx.recipients, resendReason: opts.resend?.reason }
 
   const attempt = async () => {
-    // Registros comunicados con la versión anterior: solo existe su NOTIFIED_PMKT en la auditoría.
+    // Registros comunicados con la versión anterior (sin fila en EmailDelivery): se reconocen por su rastro.
     const holder = await prisma.emailDelivery.findUnique({ where: { lockKey } })
     if (!holder && !opts.resend) {
-      const legacy = await prisma.auditLog.findFirst({ where: { recordId: opts.recordId, action: 'NOTIFIED_PMKT' } })
-      if (legacy) return { duplicate: { deliveryId: `legacy:${legacy.id}`, sentAt: legacy.timestamp.toISOString(), by: legacy.userEmail } }
+      const legacy = await findLegacySend(ctx)
+      if (legacy) return { duplicate: legacy }
     }
     try {
       return { delivery: await createDelivery(ctx, data) }

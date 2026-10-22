@@ -159,9 +159,9 @@ export async function importLegacyHistory(csv: string, opts: { apply: boolean })
   }
 }
 
-/** Convierte los NOTIFIED_PMKT de la versión anterior de la app en historial visible (el servicio ya los respeta como "enviado"). */
+/** Convierte los NOTIFIED_PMKT y WEBHOOK_TRIGGERED de la versión anterior de la app en historial visible (el servicio ya los respeta como "enviado"). */
 export async function importAuditNotifications(opts: { apply: boolean }): Promise<{ found: number; imported: number }> {
-  const logs = await prisma.auditLog.findMany({ where: { action: 'NOTIFIED_PMKT', recordId: { not: null } }, orderBy: { timestamp: 'asc' } })
+  const logs = await prisma.auditLog.findMany({ where: { action: { in: ['NOTIFIED_PMKT', 'WEBHOOK_TRIGGERED'] }, recordId: { not: null } }, orderBy: { timestamp: 'asc' } })
   let imported = 0
   const seen = new Set<string>()
   const fresh = logs.filter((l) => {
@@ -178,7 +178,7 @@ export async function importAuditNotifications(opts: { apply: boolean }): Promis
             recordId: l.recordId, mode: 'legacy', status: 'sent', lockKey: `novedad:${l.recordId}`,
             recipients: Array.isArray(details.recipients) ? details.recipients.map(String).slice(0, 50) : [],
             channel: 'admin', trigger: 'manual', triggeredByEmail: l.userEmail, triggeredByName: l.userName,
-            legacyResponse: 'Importado de la auditoría (NOTIFIED_PMKT)', createdAt: l.timestamp, finishedAt: l.timestamp,
+            legacyResponse: `Importado de la auditoría (${l.action})`, createdAt: l.timestamp, finishedAt: l.timestamp,
           },
         })
         imported++
@@ -188,4 +188,50 @@ export async function importAuditNotifications(opts: { apply: boolean }): Promis
     }
   }
   return { found: fresh.length, imported }
+}
+
+/**
+ * Novedades que la pantalla ya muestra como "✅ Sí" en el botón "Enviar email" (fecha de ejecución en el campo
+ * del botón) pero que no tienen fila de envío. El servicio ya las respeta; esto las deja en el historial.
+ */
+export async function importButtonMarked(opts: { apply: boolean }): Promise<{ found: number; imported: number }> {
+  const buttons = await prisma.field.findMany({ where: { type: 'button' }, select: { id: true } })
+  if (buttons.length === 0) return { found: 0, imported: 0 }
+
+  const records = await prisma.record.findMany({ select: { id: true, data: true, createdByEmail: true, createdByName: true } })
+  const marked: { id: string; at: Date; by: string; byName: string }[] = []
+  for (const r of records) {
+    const data = r.data as Record<string, unknown>
+    for (const b of buttons) {
+      const v = data[b.id]
+      if (typeof v === 'string' && v.trim()) {
+        const at = new Date(v)
+        marked.push({ id: r.id, at: Number.isNaN(at.getTime()) ? new Date() : at, by: r.createdByEmail, byName: r.createdByName })
+        break
+      }
+    }
+  }
+
+  const holders = await prisma.emailDelivery.findMany({ where: { lockKey: { in: marked.map((m) => `novedad:${m.id}`) } }, select: { recordId: true } })
+  const taken = new Set(holders.map((h) => h.recordId))
+  const pending = marked.filter((m) => !taken.has(m.id))
+
+  let imported = 0
+  if (opts.apply) {
+    for (const m of pending) {
+      try {
+        await prisma.emailDelivery.create({
+          data: {
+            recordId: m.id, mode: 'legacy', status: 'sent', lockKey: `novedad:${m.id}`, recipients: [], channel: 'admin', trigger: 'button',
+            triggeredByEmail: m.by, triggeredByName: m.byName, legacyResponse: 'Importado del campo del botón «Enviar email» (ya marcado como enviado)',
+            createdAt: m.at, finishedAt: m.at,
+          },
+        })
+        imported++
+      } catch (e) {
+        if ((e as { code?: string }).code !== 'P2002') throw e
+      }
+    }
+  }
+  return { found: pending.length, imported }
 }

@@ -150,3 +150,13 @@ test('rechazo parcial: se informa quiénes fueron rechazados sin fallar el enví
   const r = await sendMail({ ...mail, to: ['uno@alegra.com', 'dos@alegra.com'] })
   assert.deepEqual(r.rejected, ['dos@alegra.com'])
 })
+
+test('la contraseña de aplicación de Google (con espacios, en bloques de 4) se normaliza', () => {
+  process.env.SMTP_HOST = 'smtp.gmail.com'
+  process.env.SMTP_PASS = 'abcd efgh ijkl mnop'
+  assert.equal(getSmtpConfig()!.pass, 'abcdefghijklmnop')
+  process.env.SMTP_PASS = '  abcd\tefgh  '
+  assert.equal(getSmtpConfig()!.pass, 'abcdefgh')
+  process.env.SMTP_PASS = '   '
+  assert.equal(getSmtpConfig(), null, 'solo espacios cuenta como no configurada')
+})

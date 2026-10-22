@@ -26,7 +26,7 @@ async function main() {
     process.exit(1)
   }
 
-  const { importLegacyHistory, importAuditNotifications } = await import('../src/lib/email/legacy-import')
+  const { importLegacyHistory, importAuditNotifications, importButtonMarked } = await import('../src/lib/email/legacy-import')
   const host = new URL(process.env.DATABASE_URL ?? 'postgresql://sin-configurar').host
   console.log(`Base de datos: ${host}`)
   console.log(apply ? 'MODO: ESCRIBIR' : 'MODO: simulacro (no escribe; agrega --apply para aplicar)')
@@ -48,9 +48,14 @@ async function main() {
 
   if (audit) {
     const a = await importAuditNotifications({ apply })
-    console.log('\nAuditoría (NOTIFIED_PMKT):')
+    console.log('\nAuditoría (NOTIFIED_PMKT / WEBHOOK_TRIGGERED):')
     console.log(`  envíos encontrados: ${a.found}`)
     if (apply) console.log(`  IMPORTADOS:         ${a.imported}`)
+
+    const b = await importButtonMarked({ apply })
+    console.log('\nNovedades con el botón «Enviar email» en Sí y sin fila de envío:')
+    console.log(`  encontradas:        ${b.found}`)
+    if (apply) console.log(`  IMPORTADAS:         ${b.imported}`)
   }
   const { prisma } = await import('../src/lib/prisma')
   await prisma.$disconnect()

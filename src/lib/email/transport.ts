@@ -20,7 +20,8 @@ function isLocalHost(host: string) {
 export function getSmtpConfig(): SmtpConfig | null {
   const host = process.env.SMTP_HOST?.trim()
   const user = process.env.SMTP_USER?.trim()
-  const pass = process.env.SMTP_PASS
+  // Google muestra la contraseña de aplicación en bloques de 4 separados por espacios: se ignoran.
+  const pass = process.env.SMTP_PASS?.replace(/\s+/g, '')
   if (!host || !user) return null
   if (!isLocalHost(host) && !pass) return null
   const port = Number(process.env.SMTP_PORT) || 587
