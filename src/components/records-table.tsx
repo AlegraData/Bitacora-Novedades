@@ -5,7 +5,9 @@ import type { Field, BitacoraRecord, Tag, FilterState, Role, View, SortConfig } 
 import { saveRecord, deleteRecord } from '@/lib/actions/records'
 import { saveField, deleteField, reorderFields } from '@/lib/actions/fields'
 import { saveTag, deleteTag } from '@/lib/actions/tags'
-import { triggerButtonWebhook } from '@/lib/actions/webhook'
+import { sendRecordEmail } from '@/lib/actions/email'
+import { EmailResultBanner, EmailPreviewModal } from '@/components/email/email-panels'
+import type { SendResult } from '@/lib/email/service'
 import { saveView, deleteView } from '@/lib/actions/views'
 import { RecordEditor } from './record-editor'
 import { RecordDetail } from './record-detail'
@@ -314,6 +316,39 @@ interface RecordsTableProps {
   initialRecordId?: string
 }
 
+function ButtonCell({ done, sending, isAdmin, onSend, onPreview }: {
+  done: boolean
+  sending: boolean
+  isAdmin: boolean
+  onSend: () => void
+  onPreview: () => void
+}) {
+  const locked = done && !isAdmin // ya comunicado: solo un ADMIN puede reenviar
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+      <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, padding: '3px 8px', borderRadius: 12, fontSize: 11, fontWeight: 600, background: done ? '#dcfce7' : '#f1f5f9', color: done ? '#166534' : '#64748b', border: `1px solid ${done ? '#86efac' : '#e2e8f0'}` }}>
+        {done ? '✅ Sí' : '⬜ No'}
+      </span>
+      <button
+        onClick={onSend}
+        disabled={sending || locked}
+        title={locked ? 'Ya se comunicó. Solo un ADMIN puede reenviarlo.' : undefined}
+        style={{ padding: '3px 8px', fontSize: 11, fontWeight: 500, background: done ? '#f8fafc' : '#E0F7F4', color: done ? '#475569' : '#00A888', border: `1px solid ${done ? '#e2e8f0' : '#00C4A0'}`, borderRadius: 6, cursor: sending || locked ? 'default' : 'pointer', whiteSpace: 'nowrap', opacity: locked ? 0.5 : 1 }}
+      >
+        {sending ? '⏳ Enviando…' : done ? '↺ Reenviar' : '⚡ Ejecutar'}
+      </button>
+      <button
+        onClick={onPreview}
+        disabled={sending}
+        title="Vista previa del correo (simulacro: no envía nada)"
+        style={{ padding: '3px 6px', fontSize: 11, background: '#fff', color: '#475569', border: '1px solid #e2e8f0', borderRadius: 6, cursor: sending ? 'default' : 'pointer' }}
+      >
+        👁
+      </button>
+    </div>
+  )
+}
+
 export function RecordsTable({
   fields,
   records: initialRecords,
@@ -332,6 +367,16 @@ export function RecordsTable({
   const [showViewPanel, setShowViewPanel] = useState(false)
   const isApplyingViewRef = useRef(false)
   const [isPending, startTransition] = useTransition()
+  const [sendingId, setSendingId] = useState<string | null>(null)
+  const [emailBanner, setEmailBanner] = useState<{ record: BitacoraRecord; field: Field | null; result: SendResult } | null>(null)
+  const [emailPreview, setEmailPreview] = useState<SendResult | null>(null)
+
+  // El éxito se cierra solo; los errores se quedan hasta que se cierren (hay que poder leerlos).
+  useEffect(() => {
+    if (emailBanner?.result.status !== 'sent') return
+    const t = setTimeout(() => setEmailBanner(null), 15000)
+    return () => clearTimeout(t)
+  }, [emailBanner])
 
   // Frozen (pinned) columns
   const [pinnedFieldIds, setPinnedFieldIds] = useState<string[]>([])
@@ -557,6 +602,7 @@ export function RecordsTable({
   const handleSaveRecord = useCallback(async (data: { id?: string; recordData: Record<string, unknown> }) => {
     startTransition(async () => {
       let saved = await saveRecord(data as Parameters<typeof saveRecord>[0])
+      let autoEmail = saved.email
       
       // Auto-populate URL Bitácora if empty
       const urlField = fields_.find(f => f.name.toLowerCase() === 'url bitácora' || f.name.toLowerCase() === 'url bitacora')
@@ -566,16 +612,23 @@ export function RecordsTable({
           id: saved.id, 
           recordData: { ...saved.data, [urlField.id]: recordUrl } 
         })
+        autoEmail = autoEmail ?? saved.email
+      }
+      const { email: _unused, ...savedRecord } = saved
+      void _unused
+      // Envío automático al completar la novedad: solo se avisa si salió o si falló (omitido = estado normal).
+      if (autoEmail && (autoEmail.status === 'sent' || autoEmail.status === 'failed')) {
+        setEmailBanner({ record: savedRecord, field: null, result: autoEmail })
       }
 
       setRecords((prev) => {
-        const idx = prev.findIndex((r) => r.id === saved.id)
+        const idx = prev.findIndex((r) => r.id === savedRecord.id)
         if (idx >= 0) {
           const next = [...prev]
-          next[idx] = saved
+          next[idx] = savedRecord
           return next
         }
-        return [saved, ...prev]
+        return [savedRecord, ...prev]
       })
     })
   }, [fields_])
@@ -632,7 +685,7 @@ export function RecordsTable({
     })
   }, [])
 
-  const handleTriggerButton = useCallback(async (record: BitacoraRecord, field: Field) => {
+  const handleTriggerButton = useCallback(async (record: BitacoraRecord, field: Field, opts: { simulate?: boolean } = {}) => {
     // Validar campos requeridos antes de enviar
     const btnConfig = field.config as { sendAllFields?: boolean; selectedFieldIds?: string[] } | null
     if (btnConfig?.sendAllFields === false && (btnConfig.selectedFieldIds?.length ?? 0) > 0) {
@@ -647,21 +700,29 @@ export function RecordsTable({
         return
       }
     }
-    startTransition(async () => {
-      try {
-        await triggerButtonWebhook(record.id, field.id)
-
+    let resendReason: string | undefined
+    if (!opts.simulate && Boolean(record.data[field.id])) {
+      if (userRole !== 'ADMIN') return
+      const reason = window.prompt('Esta novedad ya se comunicó. Indica el motivo del reenvío:')
+      if (!reason?.trim()) return
+      resendReason = reason.trim()
+    }
+    setSendingId(record.id)
+    setEmailBanner(null)
+    try {
+      const result = await sendRecordEmail(record.id, { simulate: opts.simulate, resendReason })
+      setEmailBanner({ record, field, result })
+      if (opts.simulate && result.status === 'simulated') setEmailPreview(result)
+      if (result.status === 'sent' && result.mode !== 'test') {
         const now = new Date().toISOString()
-        setRecords((prev) => prev.map((r) =>
-          r.id === record.id
-            ? { ...r, data: { ...r.data, [field.id]: now } }
-            : r
-        ))
-      } catch (e: unknown) {
-        alert('Error: ' + (e instanceof Error ? e.message : String(e)))
+        setRecords((prev) => prev.map((r) => (r.id === record.id ? { ...r, data: { ...r.data, [field.id]: now } } : r)))
       }
-    })
-  }, [fields_])
+    } catch {
+      setEmailBanner({ record, field, result: { ok: false, status: 'failed', error: { code: 'UNKNOWN', message: 'No se pudo contactar al servidor. Revisa tu conexión y reintenta.' } } })
+    } finally {
+      setSendingId(null)
+    }
+  }, [fields_, userRole])
 
   const toggleAll = () => {
     if (selectedIds.size === filteredRecords.length) {
@@ -1100,13 +1161,13 @@ export function RecordsTable({
                       const isLastSticky = i === pinnedFields.length - 1
                       return (
                         <td key={field.id} style={{ ...tdStyle, position: 'sticky', left: stickyLefts[fixedCount + i] ?? 0, zIndex: 2, background: stickyBg, boxShadow: isLastSticky ? '4px 0 8px -2px rgba(0,196,160,0.25)' : undefined }}>
-                          {field.type === 'button' ? (() => { const w = Boolean(record.data[field.id]); return (<div style={{ display: 'flex', alignItems: 'center', gap: 6 }}><span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, padding: '3px 8px', borderRadius: 12, fontSize: 11, fontWeight: 600, background: w ? '#dcfce7' : '#f1f5f9', color: w ? '#166534' : '#64748b', border: `1px solid ${w ? '#86efac' : '#e2e8f0'}` }}>{w ? '✅ Sí' : '⬜ No'}</span><button onClick={() => handleTriggerButton(record, field)} disabled={isPending} style={{ padding: '3px 8px', fontSize: 11, fontWeight: 500, background: w ? '#f8fafc' : '#E0F7F4', color: w ? '#475569' : '#00A888', border: `1px solid ${w ? '#e2e8f0' : '#00C4A0'}`, borderRadius: 6, cursor: 'pointer', whiteSpace: 'nowrap' }}>{w ? '↺ Re-ejecutar' : '⚡ Ejecutar'}</button></div>) })() : field.id === titleFieldId ? <TitleCell record={record} field={field} onClick={() => setDetailRecord(record)} /> : <CellValue field={field} value={record.data[field.id]} allTags={tags} />}
+                          {field.type === 'button' ? <ButtonCell done={Boolean(record.data[field.id])} sending={sendingId === record.id} isAdmin={userRole === 'ADMIN'} onSend={() => handleTriggerButton(record, field)} onPreview={() => handleTriggerButton(record, field, { simulate: true })} /> : field.id === titleFieldId ? <TitleCell record={record} field={field} onClick={() => setDetailRecord(record)} /> : <CellValue field={field} value={record.data[field.id]} allTags={tags} />}
                         </td>
                       )
                     })}
                     {nonPinnedFields.map((field) => (
                       <td key={field.id} style={{ ...tdStyle }}>
-                        {field.type === 'button' ? (() => { const w = Boolean(record.data[field.id]); return (<div style={{ display: 'flex', alignItems: 'center', gap: 6 }}><span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, padding: '3px 8px', borderRadius: 12, fontSize: 11, fontWeight: 600, background: w ? '#dcfce7' : '#f1f5f9', color: w ? '#166534' : '#64748b', border: `1px solid ${w ? '#86efac' : '#e2e8f0'}` }}>{w ? '✅ Sí' : '⬜ No'}</span><button onClick={() => handleTriggerButton(record, field)} disabled={isPending} style={{ padding: '3px 8px', fontSize: 11, fontWeight: 500, background: w ? '#f8fafc' : '#E0F7F4', color: w ? '#475569' : '#00A888', border: `1px solid ${w ? '#e2e8f0' : '#00C4A0'}`, borderRadius: 6, cursor: 'pointer', whiteSpace: 'nowrap' }}>{w ? '↺ Re-ejecutar' : '⚡ Ejecutar'}</button></div>) })() : field.id === titleFieldId ? <TitleCell record={record} field={field} onClick={() => setDetailRecord(record)} /> : <CellValue field={field} value={record.data[field.id]} allTags={tags} />}
+                        {field.type === 'button' ? <ButtonCell done={Boolean(record.data[field.id])} sending={sendingId === record.id} isAdmin={userRole === 'ADMIN'} onSend={() => handleTriggerButton(record, field)} onPreview={() => handleTriggerButton(record, field, { simulate: true })} /> : field.id === titleFieldId ? <TitleCell record={record} field={field} onClick={() => setDetailRecord(record)} /> : <CellValue field={field} value={record.data[field.id]} allTags={tags} />}
                       </td>
                     ))}
                   </tr>
@@ -1183,6 +1244,19 @@ export function RecordsTable({
       {showChatbot && <Chatbot onClose={() => setShowChatbot(false)} />}
 
       {/* Modal: campos requeridos incompletos */}
+      {emailBanner && (
+        <div style={{ position: 'fixed', right: 16, bottom: 16, width: 400, maxWidth: 'calc(100vw - 32px)', zIndex: 70, boxShadow: '0 8px 24px rgba(0,0,0,0.18)', borderRadius: 10 }}>
+          <EmailResultBanner
+            result={emailBanner.result}
+            isAdmin={userRole === 'ADMIN'}
+            onClose={() => setEmailBanner(null)}
+            onPreview={() => setEmailPreview(emailBanner.result)}
+            onRetry={emailBanner.field ? () => handleTriggerButton(emailBanner.record, emailBanner.field!) : undefined}
+          />
+        </div>
+      )}
+      {emailPreview && <EmailPreviewModal result={emailPreview} onClose={() => setEmailPreview(null)} />}
+
       {missingFields.length > 0 && (
         <>
           <div

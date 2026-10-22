@@ -4,7 +4,9 @@ import { useState, useRef, useEffect, useTransition, useCallback, useLayoutEffec
 import type { Field, BitacoraRecord, Tag, Role, RecordData, Block } from '@/types'
 import { PersonPicker } from './person-picker'
 import { MultiSelectDropdown } from './multi-select-dropdown'
-import { triggerButtonWebhook } from '@/lib/actions/webhook'
+import { sendRecordEmail } from '@/lib/actions/email'
+import { EmailResultBanner, EmailPreviewModal, EmailHistory } from '@/components/email/email-panels'
+import type { SendResult } from '@/lib/email/service'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 
@@ -65,6 +67,10 @@ export function RecordDetail({ record, fields, tags, userRole, onSave, onClose, 
   const [confirmDelete, setConfirmDelete] = useState(false)
   const [deleting, setDeleting] = useState(false)
   const [isPending, startTransition] = useTransition()
+  const [sendingEmail, setSendingEmail] = useState(false)
+  const [emailResult, setEmailResult] = useState<{ field: Field; result: SendResult } | null>(null)
+  const [emailPreview, setEmailPreview] = useState<SendResult | null>(null)
+  const [historyKey, setHistoryKey] = useState(0)
 
   const dataFields = fields.filter((f) => f.isVisible && f.type !== 'button')
   const buttonFields = fields.filter((f) => f.isVisible && f.type === 'button')
@@ -105,21 +111,34 @@ export function RecordDetail({ record, fields, tags, userRole, onSave, onClose, 
     return true  // All roles can edit by default
   }
 
-  const handleTriggerButton = useCallback(async (field: Field) => {
-    startTransition(async () => {
-      try {
-        await triggerButtonWebhook(record.id, field.id)
-
+  const handleTriggerButton = useCallback(async (field: Field, opts: { simulate?: boolean } = {}) => {
+    let resendReason: string | undefined
+    if (!opts.simulate && Boolean(formData[field.id])) {
+      if (userRole !== 'ADMIN') return
+      const reason = window.prompt('Esta novedad ya se comunicó. Indica el motivo del reenvío:')
+      if (!reason?.trim()) return
+      resendReason = reason.trim()
+    }
+    setSendingEmail(true)
+    setEmailResult(null)
+    try {
+      const result = await sendRecordEmail(record.id, { simulate: opts.simulate, resendReason })
+      setEmailResult({ field, result })
+      setHistoryKey((k) => k + 1)
+      if (opts.simulate && result.status === 'simulated') setEmailPreview(result)
+      if (result.status === 'sent' && result.mode !== 'test') {
         const now = new Date().toISOString()
         const newData = { ...formData, [field.id]: now }
         setFormData(newData)
         // Also save immediately
         await onSave({ id: record.id, recordData: { ...newData, __blocks__: blocks as RecordData[string] } })
-      } catch (e: unknown) {
-        alert('Error: ' + (e instanceof Error ? e.message : String(e)))
       }
-    })
-  }, [record.id, formData, blocks, onSave])
+    } catch {
+      setEmailResult({ field, result: { ok: false, status: 'failed', error: { code: 'UNKNOWN', message: 'No se pudo contactar al servidor. Revisa tu conexión y reintenta.' } } })
+    } finally {
+      setSendingEmail(false)
+    }
+  }, [record.id, formData, blocks, onSave, userRole])
 
   function setField(fieldId: string, value: unknown) {
     setFormData((prev) => {
@@ -435,25 +454,48 @@ export function RecordDetail({ record, fields, tags, userRole, onSave, onClose, 
                         </span>
                       </div>
                       <button
+                        onClick={() => handleTriggerButton(field, { simulate: true })}
+                        disabled={sendingEmail}
+                        title="Vista previa del correo (simulacro: no envía nada)"
+                        style={{ padding: '8px 10px', borderRadius: 8, fontSize: 13, background: '#fff', color: '#475569', border: '1px solid #e2e8f0', cursor: sendingEmail ? 'default' : 'pointer' }}
+                      >
+                        👁 Vista previa
+                      </button>
+                      <button
                         onClick={() => handleTriggerButton(field)}
-                        disabled={isPending}
+                        disabled={sendingEmail || (executed && userRole !== 'ADMIN')}
+                        title={executed && userRole !== 'ADMIN' ? 'Ya se comunicó. Solo un ADMIN puede reenviarlo.' : undefined}
                         style={{
                           padding: '8px 16px', borderRadius: 8, fontSize: 13, fontWeight: 600,
                           background: executed ? '#fff' : '#E0F7F4',
                           color: executed ? '#475569' : '#00A888',
                           border: `1px solid ${executed ? '#e2e8f0' : '#00C4A0'}`,
-                          cursor: isPending ? 'default' : 'pointer',
+                          cursor: sendingEmail || (executed && userRole !== 'ADMIN') ? 'default' : 'pointer',
+                          opacity: executed && userRole !== 'ADMIN' ? 0.5 : 1,
                           boxShadow: '0 1px 2px rgba(0,0,0,0.05)',
                         }}
                       >
-                        {executed ? '↺ Re-ejecutar' : '⚡ Ejecutar'}
+                        {sendingEmail ? '⏳ Enviando…' : executed ? '↺ Reenviar' : '⚡ Ejecutar'}
                       </button>
                     </div>
                   )
                 })}
               </div>
+              {emailResult && (
+                <div style={{ marginTop: 12 }}>
+                  <EmailResultBanner
+                    result={emailResult.result}
+                    isAdmin={userRole === 'ADMIN'}
+                    onClose={() => setEmailResult(null)}
+                    onPreview={() => setEmailPreview(emailResult.result)}
+                    onRetry={() => handleTriggerButton(emailResult.field)}
+                  />
+                </div>
+              )}
+              <EmailHistory recordId={record.id} refreshKey={historyKey} />
             </div>
           )}
+          {emailPreview && <EmailPreviewModal result={emailPreview} onClose={() => setEmailPreview(null)} />}
 
           {/* Content / Blocks */}
           <div>
