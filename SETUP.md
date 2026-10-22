@@ -149,3 +149,11 @@ bitacora-app/
 - **Antes de desplegar** hay que crear las tablas `ApiKey` y `ApiRequestLog` en la base real (cambio aditivo): `npx prisma db push` con el `DATABASE_URL` de producción.
 - Variable opcional `API_RATE_LIMIT_PER_MIN` (default 120 por token y minuto, por instancia).
 - Tests: `npm run test:db:up && npm run test:db:push` (Postgres+pgvector local en el puerto 54329) y luego `npm test`. Los tests se niegan a correr si la base no es localhost. E2E por HTTP: ver cabecera de `tests/e2e/api-smoke.ts`.
+
+## Correos de novedades (SMTP)
+
+Los correos salen de la app por SMTP (ya no por el Apps Script). Variables: `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`,
+`SMTP_PASS` (secreto), `APP_PUBLIC_URL`, `PMKT_CHAT_WEBHOOK_URL`, opcional `EMAIL_TEST_DOMAINS`. Se configura y se
+cambia de modo (webhook / sombra / prueba / en vivo) en **Admin → ✉️ Correos**. Guía completa del traslado, secretos
+en Cloud Run, importación del historial y errores: [docs/EMAIL_MIGRATION.md](docs/EMAIL_MIGRATION.md).
+Tablas nuevas (aditivas): requieren `npx prisma db push` en producción.
