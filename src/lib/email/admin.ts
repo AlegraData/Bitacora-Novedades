@@ -140,15 +140,15 @@ export interface NovedadOption {
   createdAt: string
 }
 
-/** Últimas Novedades / Pre-novedades, para elegir con qué datos reales previsualizar, probar o simular. */
+/** Últimas novedades (de cualquier tipo), para elegir con qué datos reales previsualizar, probar o simular. */
 export async function listRecentNovedades(limit = 25): Promise<NovedadOption[]> {
   const [map, rows] = await Promise.all([loadFieldMap(), prisma.record.findMany({ orderBy: { createdAt: 'desc' }, take: 300 })])
   const out: NovedadOption[] = []
   for (const r of rows) {
     const logical = mapRecordData(r.data as Record<string, unknown>, map)
     const tipo = String(logical.tipo ?? '')
-    if (!['novedad', 'pre-novedad', 'pre novedad'].includes(tipo.toLowerCase().trim())) continue
-    out.push({ id: r.id, titulo: String(logical.titulo ?? '(sin título)').slice(0, 120), tipo, createdAt: r.createdAt.toISOString() })
+    if (!String(logical.titulo ?? '').trim()) continue
+    out.push({ id: r.id, titulo: String(logical.titulo).slice(0, 120), tipo, createdAt: r.createdAt.toISOString() })
     if (out.length >= limit) break
   }
   return out

@@ -25,13 +25,15 @@ const FIELD_TYPES: Record<string, { type: string; options?: string[] }> = {
   fechaLanzamiento: { type: 'date' },
   fechaFinEarlyAdopters: { type: 'date' },
   fechaProduccion: { type: 'date' },
+  traeVideo: { type: 'select', options: ['Sí', 'No'] },
 }
 
-/** Crea (una sola vez) los Field que usa el mapa lógico del MCP. No se trunca entre tests. */
+/** Crea los Field del mapa lógico que falten (idempotente). No se trunca entre tests. */
 export async function ensureFields() {
-  if ((await prisma.field.count()) > 0) return
-  let order = 0
+  const existing = new Set((await prisma.field.findMany({ select: { name: true } })).map((f) => f.name))
+  let order = existing.size
   for (const [key, name] of Object.entries(LOGICAL_FIELD_NAMES)) {
+    if (existing.has(name)) continue
     const def = FIELD_TYPES[key] ?? { type: 'text' }
     await prisma.field.create({
       data: {

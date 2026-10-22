@@ -4,6 +4,7 @@ import { prisma } from '@/lib/prisma'
 import { loadFieldMap } from '@/lib/mcp/fields'
 import type { Prisma } from '@/generated/prisma'
 import type { SendActor } from '@/lib/email/service'
+import { COMMUNICATION_SINCE } from '@/lib/email/communication'
 
 export const admin: SendActor = { id: null, email: 'admin@alegra.com', name: 'Admin', role: 'ADMIN' }
 export const viewer: SendActor = { id: null, email: 'viewer@alegra.com', name: 'Viewer', role: 'VIEWER' }
@@ -18,6 +19,7 @@ export const FULL = {
   correosAComunicar: ['dest1@alegra.com', 'dest2@alegra.com'],
   elaborado: ['ana@alegra.com'],
   producto: ['Alegra POS'],
+  traeVideo: 'No',
 } as Record<string, unknown>
 
 /** Crea un registro con datos por clave lógica (la misma traducción que usa el MCP). */
@@ -30,7 +32,7 @@ export async function makeRecord(overrides: Record<string, unknown> = {}, create
     if (info && v !== undefined) data[info.id] = v
   }
   return prisma.record.create({
-    data: { data: data as Prisma.InputJsonValue, createdByEmail: 'ana@alegra.com', createdByName: 'Ana', ...(createdAt ? { createdAt } : {}) },
+    data: { data: data as Prisma.InputJsonValue, createdByEmail: 'ana@alegra.com', createdByName: 'Ana', createdAt: createdAt ?? new Date(COMMUNICATION_SINCE.getTime() + 86_400_000) },
   })
 }
 

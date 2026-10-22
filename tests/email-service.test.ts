@@ -154,10 +154,9 @@ test('destinatarios inválidos: se envía a los válidos y se avisa cuáles se o
   assert.match(res.warnings![0], /mal-escrito/)
 })
 
-test('tipo que no aplica: manual falla con motivo; auto se omite', async () => {
-  const r = await makeRecord({ tipo: 'Mejora' })
-  assert.equal((await send(r.id)).error?.code, 'TIPO_NO_APLICA')
-  assert.equal((await send(r.id, { trigger: 'auto' })).skippedReason, 'tipo_no_aplica')
+test('todos los tipos se comunican (TMDIAPD-56): ya no hay tipos que no apliquen', async () => {
+  const r = await makeRecord({ tipo: 'Mejora técnica' })
+  assert.equal((await send(r.id, { trigger: 'auto' })).status, 'sent')
   assert.equal((await send('no-existe')).error?.code, 'NOT_FOUND')
 })
 

@@ -11,22 +11,14 @@ import { renderEmail, TemplateError, type RenderedEmail } from './render'
 import { buildVariables, type EmailVariables } from './variables'
 import { getSmtpConfig, parseRecipients, sendMail, smtpStatus, MAX_RECIPIENTS } from './transport'
 import { sendChatCard } from './chat'
+import { evaluateCommunication, COMMUNICATION_SINCE, BASE_REQUIRED_FIELDS } from './communication'
 
-// Solo Novedad / Pre-novedad se comunican a PMKT.
-const PMKT_TIPOS = new Set(['novedad', 'pre-novedad', 'pre novedad'])
+// TMDIAPD-56: se comunican TODOS los tipos de novedad. El envío automático solo aplica a registros
+// creados desde el despliegue (ver COMMUNICATION_SINCE): no se dispara nada retroactivo.
+export const AUTO_NOTIFY_SINCE = COMMUNICATION_SINCE
 
-// El auto-envío solo aplica a registros creados desde TMDIAPD-16 en adelante: los ~700 anteriores
-// no se re-notifican retroactivamente.
-export const AUTO_NOTIFY_SINCE = new Date('2026-10-07T00:00:00.000Z')
-
-/** Campos obligatorios para comunicar (los mismos que ya exigía la app para el envío a PMKT). */
-export const REQUIRED_NOTIFY_FIELDS: { key: string; label: string }[] = [
-  { key: 'titulo', label: 'Título' },
-  { key: 'breveDescripcion', label: 'Breve descripción' },
-  { key: 'fechaLanzamiento', label: 'Fecha de lanzamiento' },
-  { key: 'fechaProduccion', label: 'Fecha real de producción' },
-  { key: 'responsables', label: 'Responsables' },
-]
+/** Campos obligatorios para comunicar (más «¿Trae video?» y, si es Sí, «Video»: ver evaluateCommunication). */
+export const REQUIRED_NOTIFY_FIELDS = BASE_REQUIRED_FIELDS
 
 export const STALE_SENDING_MS = 5 * 60_000
 
@@ -78,11 +70,6 @@ function failure(code: EmailErrorCode, message: string, extra: Partial<EmailErro
 
 function skipped(reason: string, extra: Partial<SendResult> = {}): SendResult {
   return { ok: true, status: 'skipped', skippedReason: reason, ...extra }
-}
-
-function isMissing(v: unknown): boolean {
-  if (Array.isArray(v)) return v.length === 0
-  return v === undefined || v === null || String(v).trim() === ''
 }
 
 function auditBase(actor: SendActor) {
@@ -152,12 +139,6 @@ export async function sendNovedad(opts: SendOptions): Promise<SendResult> {
   const rawData = raw.data as Record<string, unknown>
   const logical = mapRecordData(rawData, map)
 
-  const tipo = String(logical.tipo ?? '').toLowerCase().trim()
-  if (!PMKT_TIPOS.has(tipo)) {
-    return auto
-      ? skipped('tipo_no_aplica')
-      : failure('TIPO_NO_APLICA', `Este tipo de novedad ("${logical.tipo ?? ''}") no se comunica. Solo aplica a Novedad / Pre-novedad.`)
-  }
   if (auto && raw.createdAt < AUTO_NOTIFY_SINCE) return skipped('registro_anterior_al_cutover')
 
   if (opts.resend) {
@@ -165,8 +146,8 @@ export async function sendNovedad(opts: SendOptions): Promise<SendResult> {
     if (!opts.resend.reason?.trim()) return failure('VALIDATION', 'Para reenviar indica el motivo.')
   }
 
-  // Validación (la misma lista que exigía la app antes de comunicar).
-  const missingFields = REQUIRED_NOTIFY_FIELDS.filter(({ key }) => isMissing(logical[key])).map(({ label }) => label)
+  // Validación: obligatorios para todos los tipos + «¿Trae video?» (y Video si es Sí).
+  const missingFields = evaluateCommunication(logical, { traeVideoConfigured: map.has('traeVideo') }).missing
   const { valid: recipients, invalid } = parseRecipients(logical.correosAComunicar)
   if (recipients.length === 0) missingFields.push('Correos a comunicar (mínimo un destinatario con formato de correo válido)')
   if (missingFields.length > 0) {

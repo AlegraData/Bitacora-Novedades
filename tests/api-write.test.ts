@@ -151,15 +151,15 @@ test('DELETE: exige scope Y rol ADMIN vigente del dueño; 404 si no existe; audi
   assert.equal((log.details as Record<string, unknown>).via, 'api')
 })
 
-test('notify-pmkt: tipo no aplicable → 422 con código; confirm no booleano → 400; id inexistente → 404; nunca envía', async () => {
+test('notify-pmkt: novedad incompleta → 422 con lo que falta; confirm no booleano → 400; id inexistente → 404; nunca envía', async () => {
   const t = await actor('ana@alegra.com', 'VIEWER', ['records:write', 'pmkt:notify'])
   const mejora = await (await send(create, t, 'POST', '/api/v1/records', { ...base, tipo: 'Mejora' })).json()
   const res = await send(notify, t, 'POST', `/api/v1/records/${mejora.id}/notify-pmkt`, {})
   assert.equal(res.status, 422)
   const body = await res.json()
   assert.equal(body.status, 'failed')
-  assert.equal(body.error.code, 'TIPO_NO_APLICA')
-  assert.match(body.error.message, /no se comunica/)
+  assert.equal(body.error.code, 'VALIDATION')
+  assert.ok(body.error.missingFields.includes('Breve descripción'))
 
   const bad = await send(notify, t, 'POST', `/api/v1/records/${mejora.id}/notify-pmkt`, { confirm: 'true' })
   assert.equal(bad.status, 400)

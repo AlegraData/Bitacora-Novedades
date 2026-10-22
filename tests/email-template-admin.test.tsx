@@ -94,12 +94,12 @@ test('guardar rechaza plantillas inválidas con el motivo y no versiona', async 
   }
 })
 
-test('selector de novedades: solo Novedad / Pre-novedad, más recientes primero, acotado', async () => {
-  await makeRecord({ titulo: 'Vieja' })
-  await makeRecord({ titulo: 'Mejora x', tipo: 'Mejora' })
-  await makeRecord({ titulo: 'Reciente', tipo: 'Pre-novedad' })
+test('selector de novedades: todos los tipos, más recientes primero, acotado', async () => {
+  await makeRecord({ titulo: 'Vieja' }, new Date('2026-11-01T10:00:00Z'))
+  await makeRecord({ titulo: 'Mejora x', tipo: 'Mejora' }, new Date('2026-11-02T10:00:00Z'))
+  await makeRecord({ titulo: 'Reciente', tipo: 'Pre-novedad' }, new Date('2026-11-03T10:00:00Z'))
   const list = await listRecentNovedades()
-  assert.deepEqual(list.map((n) => n.titulo), ['Reciente', 'Vieja'])
+  assert.deepEqual(list.map((n) => n.titulo), ['Reciente', 'Mejora x', 'Vieja'])
   assert.equal((await listRecentNovedades(1)).length, 1)
 })
 
