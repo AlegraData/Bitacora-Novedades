@@ -1,4 +1,4 @@
-# Postgres + pgvector efímero para correr `npm test` sin tocar Supabase.
+# Servicios efímeros para `npm test` sin tocar Supabase ni enviar correos reales.
 services:
   db:
     image: pgvector/pgvector:pg16
@@ -8,3 +8,12 @@ services:
       POSTGRES_DB: bitacora_test
     ports:
       - '54329:5432'
+
+  # Servidor SMTP de captura: los tests envían correo de verdad por SMTP y
+  # verifican el mensaje recibido vía su API HTTP (http://localhost:8025).
+  mailpit:
+    image: axllent/mailpit:latest
+    container_name: bitacora-test-mailpit
+    ports:
+      - '1025:1025'
+      - '8025:8025'
