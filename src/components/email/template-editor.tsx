@@ -4,8 +4,10 @@ import { useEffect, useRef, useState, useTransition } from 'react'
 import type { TemplateState, PreviewResult, NovedadOption } from '@/lib/email/admin'
 import {
   getEmailTemplateState, previewEmailTemplate, saveEmailTemplate, restoreEmailTemplateDefault,
-  restoreEmailTemplateRevision, getEmailTemplateRevision, listNovedadesForEmail,
+  restoreEmailTemplateRevision, getEmailTemplateRevision, listNovedadesForEmail, getEmailAdminState, sendEmailTest,
 } from '@/lib/actions/email-admin'
+import type { SendResult } from '@/lib/email/service'
+import { EmailResultBanner } from './email-panels'
 
 const card = { background: '#fff', borderRadius: 12, boxShadow: '0 2px 8px rgba(0,0,0,0.06)', padding: '16px 18px' } as const
 const inputStyle = { width: '100%', padding: '8px 10px', border: '1px solid #cbd5e1', borderRadius: 8, fontSize: 13, boxSizing: 'border-box' } as const
@@ -15,20 +17,21 @@ const primary = { ...btn, background: '#1e2a3a', color: '#fff', border: 'none' }
 export function TemplateEditor() {
   const [state, setState] = useState<TemplateState | null>(null)
   const [novedades, setNovedades] = useState<NovedadOption[]>([])
+  const [testRecipients, setTestRecipients] = useState<string[]>([])
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
-    Promise.all([getEmailTemplateState(), listNovedadesForEmail()])
-      .then(([s, n]) => { setState(s); setNovedades(n) })
+    Promise.all([getEmailTemplateState(), listNovedadesForEmail(), getEmailAdminState()])
+      .then(([s, n, a]) => { setState(s); setNovedades(n); setTestRecipients(a.settings.testRecipients) })
       .catch(() => setError('No se pudo cargar la plantilla.'))
   }, [])
 
   if (error) return <div style={{ ...card, color: '#991b1b' }}>{error}</div>
   if (!state) return <div style={{ ...card, color: '#64748b' }}>Cargando…</div>
-  return <EditorBody initial={state} novedades={novedades} onReload={async () => setState(await getEmailTemplateState())} />
+  return <EditorBody initial={state} novedades={novedades} testRecipients={testRecipients} onReload={async () => setState(await getEmailTemplateState())} />
 }
 
-export function EditorBody({ initial, novedades, onReload }: { initial: TemplateState; novedades: NovedadOption[]; onReload: () => Promise<void> }) {
+export function EditorBody({ initial, novedades, testRecipients = [], onReload }: { initial: TemplateState; novedades: NovedadOption[]; testRecipients?: string[]; onReload: () => Promise<void> }) {
   const saved = initial.template
   const [subject, setSubject] = useState(saved.subject)
   const [html, setHtml] = useState(saved.html)
@@ -38,6 +41,21 @@ export function EditorBody({ initial, novedades, onReload }: { initial: Template
   const [message, setMessage] = useState<{ ok: boolean; text: string } | null>(null)
   const [pending, startTransition] = useTransition()
   const area = useRef<HTMLTextAreaElement>(null)
+  const [testTo, setTestTo] = useState(testRecipients.join(', '))
+  const [testing, setTesting] = useState(false)
+  const [testResult, setTestResult] = useState<SendResult | null>(null)
+
+  async function sendTest() {
+    setTesting(true)
+    setTestResult(null)
+    try {
+      setTestResult(await sendEmailTest({ addresses: testTo, recordId: recordId || undefined, subject, html }))
+    } catch {
+      setTestResult({ ok: false, status: 'failed', error: { code: 'UNKNOWN', message: 'No se pudo contactar al servidor. Reintenta.' } })
+    } finally {
+      setTesting(false)
+    }
+  }
 
   const dirty = subject !== saved.subject || html !== saved.html
 
@@ -127,6 +145,15 @@ export function EditorBody({ initial, novedades, onReload }: { initial: Template
             {dirty && <span style={{ fontSize: 12, color: '#b45309' }}>Cambios sin guardar</span>}
           </div>
           {message && <div style={{ marginTop: 8, fontSize: 13, color: message.ok ? '#166534' : '#991b1b' }}>{message.text}</div>}
+
+          <div style={{ marginTop: 14, paddingTop: 12, borderTop: '1px solid #f1f5f9' }}>
+            <div style={{ fontSize: 12, color: '#64748b', marginBottom: 4 }}>Enviar prueba con este borrador (sin guardarlo), con los datos elegidos en la vista previa</div>
+            <div style={{ display: 'flex', gap: 8 }}>
+              <input value={testTo} onChange={(e) => setTestTo(e.target.value)} placeholder="tu.correo@alegra.com" style={inputStyle} />
+              <button onClick={sendTest} disabled={testing || !testTo.trim() || !!previewError} style={{ ...btn, whiteSpace: 'nowrap', opacity: testing || !testTo.trim() || previewError ? 0.5 : 1 }}>{testing ? '⏳ Enviando…' : 'Enviar prueba'}</button>
+            </div>
+            {testResult && <div style={{ marginTop: 8 }}><EmailResultBanner result={testResult} isAdmin onClose={() => setTestResult(null)} onRetry={sendTest} /></div>}
+          </div>
         </div>
 
         <div style={card}>

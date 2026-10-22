@@ -5,6 +5,8 @@ import type { AdminState } from '@/lib/email/admin'
 import type { DeliveryMode } from '@/lib/email/settings'
 import { getEmailAdminState, saveEmailSettings, verifyEmailConnection } from '@/lib/actions/email-admin'
 import { TemplateEditor } from './template-editor'
+import { TestTools } from './test-tools'
+import { DeliveriesPanel } from './deliveries-panel'
 
 const card = { background: '#fff', borderRadius: 12, boxShadow: '0 2px 8px rgba(0,0,0,0.06)', padding: '18px 20px', marginBottom: 16 } as const
 const inputStyle = { width: '100%', padding: '8px 10px', border: '1px solid #cbd5e1', borderRadius: 8, fontSize: 13, boxSizing: 'border-box' } as const
@@ -35,10 +37,12 @@ function Row({ label, children }: { label: string; children: React.ReactNode }) 
   )
 }
 
-type Sub = 'config' | 'template'
+type Sub = 'config' | 'template' | 'tests' | 'deliveries'
 const SUBTABS: [Sub, string][] = [
   ['config', 'Configuración'],
   ['template', 'Plantilla'],
+  ['tests', 'Pruebas y simulacro'],
+  ['deliveries', 'Envíos'],
 ]
 
 export function EmailAdmin() {
@@ -67,6 +71,8 @@ export function EmailAdmin() {
       </div>
       {sub === 'config' && <SettingsPanel state={state} onChange={(s) => setState({ ...state, settings: s })} />}
       {sub === 'template' && <TemplateEditor />}
+      {sub === 'tests' && <TestTools />}
+      {sub === 'deliveries' && <DeliveriesPanel />}
     </div>
   )
 }

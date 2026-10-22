@@ -9,6 +9,9 @@ import {
 } from '@/lib/email/admin'
 import type { EmailSettingsDTO, SettingsPatch } from '@/lib/email/settings'
 import type { TemplateDTO } from '@/lib/email/template-store'
+import { sendTestEmail, simulateRecord, shadowComparison, type ShadowComparison } from '@/lib/email/admin-tools'
+import { listDeliveries, getDelivery } from '@/lib/email/history'
+import type { SendResult } from '@/lib/email/service'
 
 // Todas estas acciones son solo para ADMIN. El actor sale siempre de la sesión del servidor.
 async function admin() {
@@ -62,4 +65,29 @@ export async function getEmailTemplateRevision(version: number) {
 export async function listNovedadesForEmail(): Promise<NovedadOption[]> {
   await requireAdmin()
   return listRecentNovedades()
+}
+
+// ---------------- pruebas, simulacro y envíos ----------------
+
+export async function sendEmailTest(input: { addresses: string; recordId?: string; subject?: string; html?: string }): Promise<SendResult> {
+  return sendTestEmail(await admin(), input)
+}
+
+export async function simulateEmailForRecord(recordId: string): Promise<SendResult> {
+  return simulateRecord(await admin(), recordId)
+}
+
+export async function listEmailDeliveriesAdmin(filters: { status?: string; mode?: string; recordId?: string; offset?: number }) {
+  await requireAdmin()
+  return listDeliveries('ADMIN', { ...filters, limit: 25 })
+}
+
+export async function getEmailDeliveryDetail(id: string) {
+  await requireAdmin()
+  return getDelivery('ADMIN', String(id), true)
+}
+
+export async function getEmailShadowComparison(): Promise<ShadowComparison> {
+  await requireAdmin()
+  return shadowComparison()
 }
