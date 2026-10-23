@@ -9,7 +9,8 @@ import {
 } from '@/lib/email/admin'
 import type { EmailSettingsDTO, SettingsPatch } from '@/lib/email/settings'
 import type { TemplateDTO } from '@/lib/email/template-store'
-import { sendTestEmail, simulateRecord, shadowComparison, type ShadowComparison } from '@/lib/email/admin-tools'
+import { sendTestEmail, simulateRecord, shadowComparison, resolveIdsForAdmin, sendChatTest, type ShadowComparison, type ChatTestResult } from '@/lib/email/admin-tools'
+import type { ResolvedUser } from '@/lib/email/it-hub'
 import { listDeliveries, getDelivery } from '@/lib/email/history'
 import type { SendResult } from '@/lib/email/service'
 
@@ -90,4 +91,15 @@ export async function getEmailDeliveryDetail(id: string) {
 export async function getEmailShadowComparison(): Promise<ShadowComparison> {
   await requireAdmin()
   return shadowComparison()
+}
+
+// ---------------- Chat ----------------
+
+export async function resolveEmailRecipientIds(emails: string[]): Promise<ResolvedUser[]> {
+  await requireAdmin()
+  return resolveIdsForAdmin(emails)
+}
+
+export async function sendEmailChatTest(): Promise<ChatTestResult> {
+  return sendChatTest(await admin())
 }

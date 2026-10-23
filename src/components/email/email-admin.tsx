@@ -3,7 +3,8 @@
 import { useEffect, useState, useTransition } from 'react'
 import type { AdminState } from '@/lib/email/admin'
 import type { DeliveryMode } from '@/lib/email/settings'
-import { getEmailAdminState, saveEmailSettings, verifyEmailConnection } from '@/lib/actions/email-admin'
+import type { NotifyRecipient } from '@/lib/email/recipients'
+import { getEmailAdminState, saveEmailSettings, verifyEmailConnection, resolveEmailRecipientIds, sendEmailChatTest } from '@/lib/actions/email-admin'
 import { TemplateEditor } from './template-editor'
 import { TestTools } from './test-tools'
 import { DeliveriesPanel } from './deliveries-panel'
@@ -83,18 +84,23 @@ export function SettingsPanel({ state, onChange }: { state: AdminState; onChange
   const [fromName, setFromName] = useState(settings.fromName)
   const [replyTo, setReplyTo] = useState(settings.replyTo ?? '')
   const [tests, setTests] = useState(settings.testRecipients.join(', '))
+  const [rows, setRows] = useState<NotifyRecipient[]>(settings.recipients)
+  const [newEmail, setNewEmail] = useState('')
+  const [chatMsg, setChatMsg] = useState<string | null>(null)
+  const [resolving, setResolving] = useState(false)
+  const [chatTesting, setChatTesting] = useState(false)
   const [message, setMessage] = useState<{ ok: boolean; text: string } | null>(null)
   const [verify, setVerify] = useState<{ ok: boolean; text: string; detail?: string } | 'loading' | null>(null)
   const [pending, startTransition] = useTransition()
 
   const dirty =
-    mode !== settings.mode || fromName !== settings.fromName || replyTo !== (settings.replyTo ?? '') || tests !== settings.testRecipients.join(', ')
+    mode !== settings.mode || fromName !== settings.fromName || replyTo !== (settings.replyTo ?? '') || tests !== settings.testRecipients.join(', ') || JSON.stringify(rows) !== JSON.stringify(settings.recipients)
 
   function save() {
     if (mode !== settings.mode && mode === 'live' &&
       !window.confirm('A partir de ahora los correos de las novedades saldrán por SMTP a los destinatarios reales. ¿Continuar?')) return
     startTransition(async () => {
-      const res = await saveEmailSettings({ mode, fromName, replyTo: replyTo.trim() || null, testRecipients: tests })
+      const res = await saveEmailSettings({ mode, fromName, replyTo: replyTo.trim() || null, testRecipients: tests, recipients: rows })
       if (res.ok) {
         onChange(res.data)
         setMessage({ ok: true, text: 'Guardado.' })
@@ -102,6 +108,51 @@ export function SettingsPanel({ state, onChange }: { state: AdminState; onChange
         setMessage({ ok: false, text: res.error + (res.detail ? ` (${res.detail})` : '') })
       }
     })
+  }
+
+  async function resolveIds() {
+    setResolving(true)
+    setChatMsg(null)
+    try {
+      const res = await resolveEmailRecipientIds(rows.filter((r) => !r.chatUserId).map((r) => r.email))
+      const found = res.filter((r) => r.id)
+      setRows(rows.map((r) => {
+        const hit = found.find((x) => x.email === r.email)
+        return hit ? { ...r, chatUserId: hit.id, name: r.name || hit.fullName } : r
+      }))
+      const bad = res.filter((r) => !r.id)
+      setChatMsg(
+        `IDs resueltos: ${found.length}.` +
+          (bad.length ? ` No se pudo: ${bad.map((b) => `${b.email} (${b.error})`).join('; ')}.` : '') +
+          (found.length ? ' Pulsa «Guardar cambios» para conservarlos.' : '')
+      )
+    } catch {
+      setChatMsg('No se pudo consultar el IT Hub.')
+    } finally {
+      setResolving(false)
+    }
+  }
+
+  async function chatTest() {
+    const where = state.chat.testWebhookConfigured
+      ? 'el espacio de PRUEBAS de Chat'
+      : 'el canal REAL de Chat (tp-product-update); se notificará a las personas mencionadas'
+    if (!window.confirm(`Se publicará un mensaje de prueba en ${where}. ¿Continuar?`)) return
+    setChatTesting(true)
+    setChatMsg(null)
+    try {
+      const r = await sendEmailChatTest()
+      setChatMsg(
+        r.ok
+          ? `✅ Mensaje publicado en ${r.target === 'prueba' ? 'el espacio de pruebas' : 'el canal real'}. Mencionados: ${r.mentioned.join(', ') || 'nadie'}.` +
+              (r.unresolved.length ? ` Sin ID (en texto, sin notificar): ${r.unresolved.map((u) => u.email).join(', ')}.` : '')
+          : `❌ ${r.error ?? 'No se pudo publicar.'}`
+      )
+    } catch {
+      setChatMsg('❌ No se pudo contactar al servidor.')
+    } finally {
+      setChatTesting(false)
+    }
   }
 
   async function checkSmtp() {
@@ -138,6 +189,51 @@ export function SettingsPanel({ state, onChange }: { state: AdminState; onChange
       </div>
 
       <div style={card}>
+        <h3 style={{ fontSize: 15, fontWeight: 700, color: '#1a202c', marginBottom: 4 }}>Personas a etiquetar en Chat</h3>
+        <p style={{ fontSize: 12, color: '#64748b', marginBottom: 10 }}>
+          La tarjeta que se publica en el canal de Chat cuando se envía una novedad menciona (@) a estas personas. Pulsa «Resolver IDs de Chat» para
+          obtener su ID desde el IT Hub (si no lo tienen, se resuelve solo al publicar). No cambia a quién llega el correo.
+          {!settings.recipientsCustomized && ' Ahora se usa la lista por defecto; al guardar queda como tuya.'}
+          {' '}La tarjeta la publica la app solo en modo En vivo; en los modos Apps Script y Sombra la sigue publicando el script (sin menciones).
+        </p>
+        <div style={{ display: 'grid', gap: 6, marginBottom: 8 }}>
+          {rows.map((r, i) => (
+            <div key={r.email} style={{ display: 'grid', gridTemplateColumns: 'minmax(180px, 1.4fr) minmax(140px, 1fr) minmax(170px, 1fr) auto', gap: 6, alignItems: 'center' }}>
+              <span style={{ fontSize: 13, color: '#1e293b', wordBreak: 'break-all' }}>{r.email}</span>
+              <input value={r.name ?? ''} placeholder="Nombre" maxLength={80} onChange={(e) => setRows(rows.map((x, j) => (j === i ? { ...x, name: e.target.value } : x)))} style={inputStyle} />
+              <input value={r.chatUserId ?? ''} placeholder="ID de Chat (opcional)" inputMode="numeric" onChange={(e) => setRows(rows.map((x, j) => (j === i ? { ...x, chatUserId: e.target.value.replace(/[^0-9]/g, '') || undefined } : x)))} style={{ ...inputStyle, fontFamily: 'monospace' }} />
+              <button onClick={() => setRows(rows.filter((_, j) => j !== i))} disabled={rows.length <= 1} title={rows.length <= 1 ? 'Debe quedar al menos uno' : 'Quitar'} style={{ ...btn, padding: '5px 10px', opacity: rows.length <= 1 ? 0.4 : 1 }}>✕</button>
+            </div>
+          ))}
+        </div>
+        <div style={{ display: 'flex', gap: 6, marginBottom: 18 }}>
+          <input value={newEmail} onChange={(e) => setNewEmail(e.target.value)} placeholder="agregar.correo@alegra.com" style={inputStyle} />
+          <button
+            onClick={() => {
+              const email = newEmail.trim().toLowerCase()
+              if (email && !rows.some((r) => r.email === email)) setRows([...rows, { email }])
+              setNewEmail('')
+            }}
+            disabled={!newEmail.trim()}
+            style={{ ...btn, whiteSpace: 'nowrap', opacity: newEmail.trim() ? 1 : 0.5 }}
+          >
+            Agregar
+          </button>
+        </div>
+
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center', margin: '-6px 0 18px' }}>
+          <button onClick={resolveIds} disabled={resolving || !state.itHub.configured || rows.every((r) => r.chatUserId)} title={state.itHub.configured ? undefined : 'Falta IT_HUB_URL / IT_HUB_API_KEY'} style={{ ...btn, opacity: resolving || !state.itHub.configured || rows.every((r) => r.chatUserId) ? 0.5 : 1 }}>
+            {resolving ? 'Consultando…' : 'Resolver IDs de Chat'}
+          </button>
+          <button onClick={chatTest} disabled={chatTesting || dirty || !state.chat.configured} title={dirty ? 'Guarda los cambios antes de probar' : undefined} style={{ ...btn, opacity: chatTesting || dirty || !state.chat.configured ? 0.5 : 1 }}>
+            {chatTesting ? 'Publicando…' : '💬 Mensaje de prueba en Chat'}
+          </button>
+          <span style={{ fontSize: 11, color: '#94a3b8' }}>
+            {state.itHub.configured ? 'IT Hub conectado.' : 'IT Hub sin configurar.'} {state.chat.testWebhookConfigured ? 'La prueba va a un espacio de pruebas.' : 'La prueba va al canal real y menciona a estas personas.'}
+          </span>
+        </div>
+        {chatMsg && <div style={{ fontSize: 13, color: chatMsg.startsWith('❌') ? '#991b1b' : '#334155', margin: '-10px 0 16px' }}>{chatMsg}</div>}
+
         <h3 style={{ fontSize: 15, fontWeight: 700, color: '#1a202c', marginBottom: 10 }}>Remitente y pruebas</h3>
         <div style={{ display: 'grid', gap: 12, gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))' }}>
           <label style={{ fontSize: 12, color: '#64748b' }}>Nombre visible del remitente

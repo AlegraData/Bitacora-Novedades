@@ -191,6 +191,8 @@ model EmailSettings {
   fromName       String   @default("Alegra Product News")
   replyTo        String?
   testRecipients String[]
+  // Personas a etiquetar en la tarjeta de Chat: [{ email, name?, chatUserId? }]. null = las de por defecto (recipients.ts).
+  notifyRecipients Json?
   updatedAt      DateTime @updatedAt
   updatedByEmail String?
 }

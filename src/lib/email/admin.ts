@@ -4,6 +4,7 @@ import { getSettings, updateSettings, MODE_LABELS, DELIVERY_MODES, MAX_TEST_RECI
 import { smtpStatus, verifySmtp } from './transport'
 import { findWebhookButton } from './service'
 import { publicAppUrl } from './variables'
+import { itHubConfigured } from './it-hub'
 
 import { prisma } from '@/lib/prisma'
 import { loadFieldMap, mapRecordData } from '@/lib/mcp/fields'
@@ -32,7 +33,8 @@ export async function run<T>(fn: () => Promise<T>): Promise<AdminResult<T>> {
 export interface AdminState {
   settings: EmailSettingsDTO
   smtp: ReturnType<typeof smtpStatus>
-  chat: { configured: boolean; host: string | null }
+  chat: { configured: boolean; host: string | null; testWebhookConfigured: boolean }
+  itHub: { configured: boolean }
   webhook: { configured: boolean }
   modes: { id: DeliveryMode; label: string }[]
   limits: { maxTestRecipients: number; testDomains: string[] }
@@ -51,7 +53,8 @@ export async function getAdminState(): Promise<AdminState> {
   return {
     settings,
     smtp: smtpStatus(),
-    chat: { configured: Boolean(process.env.PMKT_CHAT_WEBHOOK_URL?.trim()), host: chatHost },
+    chat: { configured: Boolean(process.env.PMKT_CHAT_WEBHOOK_URL?.trim()), host: chatHost, testWebhookConfigured: Boolean(process.env.PMKT_CHAT_TEST_WEBHOOK_URL?.trim()) },
+    itHub: { configured: itHubConfigured() },
     webhook: { configured: webhook !== null },
     modes: DELIVERY_MODES.map((id) => ({ id, label: MODE_LABELS[id] })),
     limits: { maxTestRecipients: MAX_TEST_RECIPIENTS, testDomains: allowedTestDomains() },

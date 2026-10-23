@@ -77,7 +77,7 @@ test('guardia: toda acción de servidor de correo-admin exige ADMIN antes de hac
   const files = readdirSync(dir).filter((f) => /^email-admin.*\.ts$/.test(f))
   assert.ok(files.length >= 1)
   for (const f of files) {
-    const src = readFileSync(join(dir, f), 'utf8')
+    const src = readFileSync(join(dir, f), 'utf8').split(String.fromCharCode(13)).join('')
     assert.ok(src.startsWith("'use server'"), `${f} debe ser 'use server'`)
     const chunks = src.split(/\nexport async function /).slice(1)
     assert.ok(chunks.length > 0)
@@ -90,9 +90,10 @@ test('guardia: toda acción de servidor de correo-admin exige ADMIN antes de hac
 })
 
 const baseState = (over: Record<string, unknown> = {}) => ({
-  settings: { mode: 'webhook', fromName: 'Alegra Product News', replyTo: null, testRecipients: [], updatedAt: null, updatedByEmail: null },
+  settings: { mode: 'webhook', fromName: 'Alegra Product News', replyTo: null, testRecipients: [], recipients: [{ email: 'cristian.albornoz@alegra.com', name: 'Cristian Albornoz Arias' }, { email: 'valentina.garcia@alegra.com' }], recipientsCustomized: false, updatedAt: null, updatedByEmail: null },
   smtp: { configured: false, host: null, port: 587, user: 'data.news@alegra.com', fromEmail: 'data.news@alegra.com', hasPassword: false, missing: ['SMTP_HOST', 'SMTP_PASS'] },
-  chat: { configured: true, host: 'chat.googleapis.com' },
+  chat: { configured: true, host: 'chat.googleapis.com', testWebhookConfigured: false },
+  itHub: { configured: true },
   webhook: { configured: true },
   modes: [{ id: 'webhook', label: 'a' }, { id: 'shadow', label: 'b' }, { id: 'test', label: 'c' }, { id: 'live', label: 'd' }],
   limits: { maxTestRecipients: 5, testDomains: ['alegra.com'] },
@@ -102,7 +103,7 @@ const baseState = (over: Record<string, unknown> = {}) => ({
 
 test('pantalla de configuración: advierte lo que falta y nunca muestra la contraseña', () => {
   const h = render(<SettingsPanel state={baseState()} onChange={() => {}} />).replace(/<!-- -->/g, '')
-  for (const t of ['Modo de envío', 'Apps Script (legado)', 'Sombra', 'Falta configurar', 'SMTP_HOST, SMTP_PASS', 'No cargada', 'Verificar conexión', 'chat.googleapis.com', 'Requiere el SMTP configurado']) {
+  for (const t of ['Modo de envío', 'Apps Script (legado)', 'Sombra', 'Falta configurar', 'SMTP_HOST, SMTP_PASS', 'No cargada', 'Personas a etiquetar en Chat', 'cristian.albornoz@alegra.com', 'lista por defecto', 'Verificar conexión', 'chat.googleapis.com', 'Requiere el SMTP configurado']) {
     assert.ok(h.includes(t), `falta "${t}"`)
   }
   const ok = render(<SettingsPanel state={baseState({ smtp: { configured: true, host: 'smtp.gmail.com', port: 587, user: 'data.news@alegra.com', fromEmail: 'data.news@alegra.com', hasPassword: true, missing: [] } })} onChange={() => {}} />).replace(/<!-- -->/g, '')

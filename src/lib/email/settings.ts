@@ -2,6 +2,8 @@ import { prisma } from '@/lib/prisma'
 import { addAuditLog } from '@/lib/actions/audit'
 import { smtpStatus, parseRecipients } from './transport'
 import { EmailSendError } from './errors'
+import type { Prisma } from '@/generated/prisma'
+import { normalizeRecipients, recipientsOrDefault, RecipientsError, type NotifyRecipient } from './recipients'
 
 export type DeliveryMode = 'webhook' | 'shadow' | 'test' | 'live'
 export const DELIVERY_MODES: DeliveryMode[] = ['webhook', 'shadow', 'test', 'live']
@@ -30,6 +32,9 @@ export interface EmailSettingsDTO {
   fromName: string
   replyTo: string | null
   testRecipients: string[]
+  /** Personas a etiquetar en la tarjeta de Chat (las de por defecto mientras nadie las cambie). */
+  recipients: NotifyRecipient[]
+  recipientsCustomized: boolean
   updatedAt: string | null
   updatedByEmail: string | null
 }
@@ -41,6 +46,8 @@ export async function getSettings(): Promise<EmailSettingsDTO> {
     fromName: s.fromName,
     replyTo: s.replyTo,
     testRecipients: s.testRecipients,
+    recipients: recipientsOrDefault(s.notifyRecipients),
+    recipientsCustomized: s.notifyRecipients != null,
     updatedAt: s.updatedAt.toISOString(),
     updatedByEmail: s.updatedByEmail,
   }
@@ -51,6 +58,7 @@ export interface SettingsPatch {
   fromName?: unknown
   replyTo?: unknown
   testRecipients?: unknown
+  recipients?: unknown
 }
 
 export interface SettingsActor {
@@ -66,7 +74,7 @@ function bad(message: string): never {
 /** Valida y guarda. Cambiar de modo exige que lo que ese modo necesita ya esté listo. */
 export async function updateSettings(actor: SettingsActor, patch: SettingsPatch): Promise<EmailSettingsDTO> {
   const current = await getSettings()
-  const data: { mode?: string; fromName?: string; replyTo?: string | null; testRecipients?: string[] } = {}
+  const data: { mode?: string; fromName?: string; replyTo?: string | null; testRecipients?: string[]; notifyRecipients?: NotifyRecipient[] } = {}
 
   if (patch.fromName !== undefined) {
     const v = typeof patch.fromName === 'string' ? patch.fromName.trim() : ''
@@ -92,6 +100,15 @@ export async function updateSettings(actor: SettingsActor, patch: SettingsPatch)
     data.testRecipients = parsed.valid
   }
 
+  if (patch.recipients !== undefined) {
+    try {
+      data.notifyRecipients = normalizeRecipients(patch.recipients)
+    } catch (e) {
+      if (e instanceof RecipientsError) bad(e.message)
+      throw e
+    }
+  }
+
   if (patch.mode !== undefined) {
     if (!(DELIVERY_MODES as unknown[]).includes(patch.mode)) bad(`Modo inválido. Opciones: ${DELIVERY_MODES.join(', ')}.`)
     const mode = patch.mode as DeliveryMode
@@ -109,7 +126,11 @@ export async function updateSettings(actor: SettingsActor, patch: SettingsPatch)
 
   if (Object.keys(data).length === 0) bad('No hay cambios para guardar.')
 
-  await prisma.emailSettings.update({ where: { id: 'singleton' }, data: { ...data, updatedByEmail: actor.email } })
+  const { notifyRecipients, ...rest } = data
+  await prisma.emailSettings.update({
+    where: { id: 'singleton' },
+    data: { ...rest, ...(notifyRecipients ? { notifyRecipients: notifyRecipients as unknown as Prisma.InputJsonValue } : {}), updatedByEmail: actor.email },
+  })
   await addAuditLog({
     userId: actor.id,
     userEmail: actor.email,
