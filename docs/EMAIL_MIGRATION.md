@@ -118,3 +118,28 @@ El detalle técnico (respuesta del servidor SMTP) lo ve solo un ADMIN, en la pan
 - `npm run test:db:up` levanta Postgres y Mailpit (SMTP de captura, http://localhost:8025) para los tests.
 - `npm test`: suite completa (servicio, transporte, plantilla, admin, MCP, API, UI).
 - E2E por HTTP: ver la cabecera de `tests/e2e/email-smoke.ts`.
+
+## TMDIAPD-56: todos los tipos, «¿Trae video?», destinatarios y menciones en Chat
+
+- **Todos los tipos** de novedad se comunican (Novedad, Pre-novedad, Mejora técnica, Experimento, Normativa,
+  Novedades pequeñas, Resolución de Issues). El envío automático solo aplica a registros creados desde la fecha de
+  corte (`COMMUNICATION_SINCE` en `src/lib/email/communication.ts`, el momento del despliegue): nada retroactivo.
+- **Obligatorios para comunicar:** Título, Breve descripción, Fecha de lanzamiento, Fecha real de producción, al
+  menos un Responsable y **¿Trae video?** (Sí/No). Con **Sí** también hace falta **Video**. Si falta algo no se envía y
+  la novedad queda **pendiente** (etiqueta «⏳ Falta: …» en la tabla y en el detalle); al completarlo y guardar, el
+  correo sale solo. «Correos a comunicar» pasó a ser informativo.
+- **Destinatarios:** se configuran en Admin → Correos (por defecto Cristian Albornoz, Cristian Bautista y Valentina
+  García). El correo va solo a ellos. *Solo aplica en modo En vivo*: en Apps Script/Sombra el script sigue usando
+  «Correos a comunicar» del registro.
+- **Chat:** la tarjeta menciona a los destinatarios (`<users/ID>` en el texto del mensaje). Los IDs se resuelven con el
+  IT Hub (`IT_HUB_URL`, `IT_HUB_API_KEY`, scope `google-user`) la primera vez y se guardan; si el IT Hub falla, el
+  correo y la tarjeta salen igual con los nombres sin notificar. Admin → Correos → «Mensaje de prueba en Chat»
+  publica una prueba (en `PMKT_CHAT_TEST_WEBHOOK_URL` si existe; si no, en el canal real).
+
+### Pasos de despliegue (en este orden)
+
+1. `npx prisma db push` en producción (columna nueva `EmailSettings.notifyRecipients`, aditiva). **Antes** de desplegar.
+2. Preparar los datos (simulacro primero; imprime las opciones reales de «Tipo»):
+   `npx tsx scripts/setup-tmdiapd-56.ts` y luego `--apply` (crea «¿Trae video?» y unifica «Pre novedad»).
+3. Desplegar. Hasta que exista el campo «¿Trae video?» esa regla se omite (no bloquea nada).
+4. En Admin → Correos: **Resolver IDs de Chat**, guardar y probar con **Mensaje de prueba en Chat**.

@@ -7,7 +7,7 @@ import { LOGICAL_FIELD_NAMES } from '@/lib/field-names'
  * El envío automático solo aplica a registros creados desde esta fecha (el despliegue de TMDIAPD-56):
  * al abrir todos los tipos no se dispara nada retroactivo sobre registros anteriores.
  */
-export const COMMUNICATION_SINCE = new Date('2026-10-22T22:00:00.000Z')
+export const COMMUNICATION_SINCE = new Date('2026-10-23T00:38:00.000Z')
 
 export const MISSING_TRAE_VIDEO = '¿Trae video? (elige Sí o No)'
 export const MISSING_VIDEO = 'Video (marcaste «¿Trae video?» = Sí)'

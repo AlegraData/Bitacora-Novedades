@@ -157,3 +157,5 @@ Los correos salen de la app por SMTP (ya no por el Apps Script). Variables: `SMT
 cambia de modo (webhook / sombra / prueba / en vivo) en **Admin → ✉️ Correos**. Guía completa del traslado, secretos
 en Cloud Run, importación del historial y errores: [docs/EMAIL_MIGRATION.md](docs/EMAIL_MIGRATION.md).
 Tablas nuevas (aditivas): requieren `npx prisma db push` en producción.
+
+Variables de Chat/menciones (TMDIAPD-56): `IT_HUB_URL` e `IT_HUB_API_KEY` (secreto) para resolver el ID de Chat de cada destinatario, y opcional `PMKT_CHAT_TEST_WEBHOOK_URL` (espacio de pruebas para el mensaje de prueba). Ver el final de [docs/EMAIL_MIGRATION.md](docs/EMAIL_MIGRATION.md).
