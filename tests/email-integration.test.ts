@@ -91,14 +91,14 @@ test('MCP notify_pmkt: sin confirm es un simulacro con el texto del correo; con 
   assert.equal((await listMessages()).length, 1)
 })
 
-test('MCP notify_pmkt: resend solo para ADMIN y con motivo', async () => {
+test('MCP notify_pmkt: resend para cualquier usuario, pero con motivo', async () => {
   const r = await makeRecord()
   await handleNotifyPmkt({ recordId: r.id, confirm: true }, ana)
-  const denied = (await handleNotifyPmkt({ recordId: r.id, confirm: true, resend: true, reason: 'x' }, ana)) as { error: { code: string } }
-  assert.equal(denied.error.code, 'FORBIDDEN')
+  const tooShort = (await handleNotifyPmkt({ recordId: r.id, confirm: true, resend: true, reason: 'x' }, ana)) as { error: { code: string } }
+  assert.equal(tooShort.error.code, 'VALIDATION')
   const noReason = (await handleNotifyPmkt({ recordId: r.id, confirm: true, resend: true }, adm)) as { error: { code: string } }
   assert.equal(noReason.error.code, 'VALIDATION')
-  const ok = (await handleNotifyPmkt({ recordId: r.id, confirm: true, resend: true, reason: 'Corrección' }, adm)) as { status: string }
+  const ok = (await handleNotifyPmkt({ recordId: r.id, confirm: true, resend: true, reason: 'Corrección de la fecha' }, ana)) as { status: string }
   assert.equal(ok.status, 'sent')
   assert.equal((await listMessages()).length, 2)
 })
@@ -168,7 +168,7 @@ test('botón: modo webhook legado sigue funcionando igual que antes (POST con lo
   }
 })
 
-test('API notify-pmkt: el estado HTTP sale del código del error (409 duplicado, 422 datos, 503 sin SMTP, 403 reenvío)', async () => {
+test('API notify-pmkt: el estado HTTP sale del código del error (409 duplicado, 422 datos, 503 sin SMTP, 422 reenvío sin motivo)', async () => {
   const key = (await createApiKey({ email: ana.email, role: 'VIEWER' }, { name: 'n', scopes: ['pmkt:notify'] })).token
   const call = (id: string, body: unknown) =>
     notifyRoute(new NextRequest(`http://localhost/api/v1/records/${id}/notify-pmkt`, {
@@ -188,8 +188,8 @@ test('API notify-pmkt: el estado HTTP sale del código del error (409 duplicado,
   assert.equal(dup.status, 409)
   assert.equal((await dup.json()).error.code, 'DUPLICATE')
 
-  const forbidden = await call(r.id, { confirm: true, resend: true, reason: 'x' })
-  assert.equal(forbidden.status, 403)
+  const noReason = await call(r.id, { confirm: true, resend: true, reason: 'x' })
+  assert.equal(noReason.status, 422)
 
   const incomplete = await makeRecord({ responsables: [] })
   const miss = await call(incomplete.id, { confirm: true })

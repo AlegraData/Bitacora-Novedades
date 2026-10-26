@@ -107,12 +107,12 @@ async function main() {
     assert.equal((await listMessages()).length, 1)
   })
 
-  await check('un usuario normal no puede forzar el reenvío (403); un ADMIN sí, con motivo', async () => {
-    const denied = await api(`/records/${recordId}/notify-pmkt`, viewerKey, { method: 'POST', body: JSON.stringify({ confirm: true, resend: true, reason: 'x' }) })
-    assert.equal(denied.status, 403)
+  await check('reenviar exige motivo (422); con motivo sale, también para un usuario normal', async () => {
+    const tooShort = await api(`/records/${recordId}/notify-pmkt`, viewerKey, { method: 'POST', body: JSON.stringify({ confirm: true, resend: true, reason: 'x' }) })
+    assert.equal(tooShort.status, 422)
     const noReason = await api(`/records/${recordId}/notify-pmkt`, adminKey, { method: 'POST', body: JSON.stringify({ confirm: true, resend: true }) })
     assert.equal(noReason.status, 422)
-    const ok = await api(`/records/${recordId}/notify-pmkt`, adminKey, { method: 'POST', body: JSON.stringify({ confirm: true, resend: true, reason: 'Corrección' }) })
+    const ok = await api(`/records/${recordId}/notify-pmkt`, viewerKey, { method: 'POST', body: JSON.stringify({ confirm: true, resend: true, reason: 'Corrección de la fecha' }) })
     assert.equal(ok.status, 200)
     assert.equal((await listMessages()).length, 2)
   })

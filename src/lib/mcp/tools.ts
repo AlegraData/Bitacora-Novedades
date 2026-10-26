@@ -245,7 +245,7 @@ export const TOOLS = [
       'Antes de enviar valida que título, breve descripción, fecha de lanzamiento, fecha real de producción, al menos un responsable y «¿Trae video?» estén completos (y el Video si «¿Trae video?» es Sí); si falta alguno, devuelve error.missingFields con la lista exacta, sin enviar nada, y la novedad queda pendiente hasta completarlo. ' +
       'Flujo en dos pasos: llamar SIN "confirm" devuelve un simulacro (asunto, destinatarios y texto exactos del correo) sin enviar nada; hay que mostrárselo al usuario y volver a llamar con "confirm: true" para el envío real. ' +
       'La respuesta siempre trae status (sent | simulated | failed | skipped) y, si falló, error.code y error.message con el motivo (ej. DUPLICATE, VALIDATION, SMTP_AUTH, RECIPIENT_REJECTED, RATE_LIMIT, SMTP_NOT_CONFIGURED). ' +
-      'Una novedad ya enviada no se reenvía: solo un ADMIN puede forzarlo con "resend: true" y un "reason".',
+      'Una novedad ya enviada no se reenvía sola: devuelve DUPLICATE. Si de verdad hace falta (p. ej. salió incompleta), avisa al usuario de que ya se comunicó, pídele el motivo y vuelve a llamar con "resend: true" y "reason" (mínimo 10 caracteres; queda en el historial).',
     inputSchema: {
       type: 'object',
       required: ['recordId'],
@@ -255,8 +255,8 @@ export const TOOLS = [
           type: 'boolean',
           description: 'Debe ser true para disparar el envío real. Sin este parámetro (o en false) solo se simula y se devuelve el preview, sin enviar nada.',
         },
-        resend: { type: 'boolean', description: 'Solo ADMIN: reenviar una novedad que ya se comunicó. Requiere "reason".' },
-        reason: { type: 'string', description: 'Motivo del reenvío (obligatorio con resend: true).' },
+        resend: { type: 'boolean', description: 'Reenviar una novedad que ya se comunicó. Requiere "reason"; confirma antes con el usuario.' },
+        reason: { type: 'string', description: 'Motivo del reenvío (obligatorio con resend: true, 10 a 500 caracteres).' },
       },
     },
   },

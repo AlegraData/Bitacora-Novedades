@@ -85,3 +85,14 @@ export function hasTraeVideoField(fields: { name: string }[]): boolean {
   const target = LOGICAL_FIELD_NAMES.traeVideo.toLowerCase()
   return fields.some((f) => f.name.toLowerCase().trim() === target)
 }
+
+/** Reenviar una novedad ya comunicada exige un motivo, para dejar constancia en el historial. */
+export const MIN_RESEND_REASON = 10
+export const MAX_RESEND_REASON = 500
+
+/** Devuelve el motivo limpio, o null si no cumple el largo mínimo/máximo. */
+export function normalizeResendReason(reason: unknown): string | null {
+  if (typeof reason !== 'string') return null
+  const r = reason.trim()
+  return r.length >= MIN_RESEND_REASON && r.length <= MAX_RESEND_REASON ? r : null
+}

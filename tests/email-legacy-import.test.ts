@@ -71,7 +71,7 @@ test('simulacro (dry-run) no escribe nada; apply importa, es idempotente y repor
   assert.equal(await prisma.emailDelivery.count(), 2)
 })
 
-test('lo importado cuenta como ya enviado: la app no reenvía (auto ni manual) y solo un ADMIN puede forzarlo', async () => {
+test('lo importado cuenta como ya enviado: la app no reenvía (auto ni manual) y solo se fuerza con un motivo', async () => {
   await setMode('live')
   const a = await makeRecord({ titulo: 'Ya comunicada' })
   await importLegacyHistory(`2026-10-01 10:00:00,,ana@alegra.com,Novedad,x,https://x.vercel.app/app?record=${a.id},a@alegra.com,`, { apply: true })
@@ -82,7 +82,12 @@ test('lo importado cuenta como ya enviado: la app no reenvía (auto ni manual) y
   assert.equal(manual.error?.previous?.by, 'ana@alegra.com')
   assert.equal((await listMessages()).length, 0)
 
-  const forced = await sendNovedad({ recordId: a.id, actor: admin, channel: 'web', trigger: 'manual', resend: { reason: 'Corrección' } })
+  const noReason = await sendNovedad({ recordId: a.id, actor: viewer, channel: 'web', trigger: 'manual', resend: { reason: 'x' } })
+  assert.equal(noReason.error?.code, 'VALIDATION')
+  assert.equal((await listMessages()).length, 0)
+
+  // cualquier usuario puede forzarlo si explica por qué
+  const forced = await sendNovedad({ recordId: a.id, actor: viewer, channel: 'web', trigger: 'manual', resend: { reason: 'Corrección' } })
   assert.equal(forced.status, 'sent')
 })
 
@@ -121,7 +126,7 @@ async function buttonField() {
   return prisma.field.create({ data: { name: 'Enviar email', type: 'button', order: 999, config: { action: 'webhook', webhookUrl: 'http://127.0.0.1:9/x' } } })
 }
 
-test('novedad ya enviada con el botón (fecha en el campo): no se reenvía por ningún canal; un ADMIN puede forzarlo', async () => {
+test('novedad ya enviada con el botón (fecha en el campo): no se reenvía por ningún canal; se fuerza con un motivo', async () => {
   await setMode('live')
   const btn = await buttonField()
   try {
@@ -146,8 +151,8 @@ test('novedad ya enviada con el botón (fecha en el campo): no se reenvía por n
     const fresh = await makeRecord({ titulo: 'Nueva' })
     assert.equal((await sendNovedad({ recordId: fresh.id, actor: viewer, channel: 'web', trigger: 'manual' })).status, 'sent')
 
-    // y un ADMIN puede reenviar la ya enviada, con motivo
-    const forced = await sendNovedad({ recordId: sent.id, actor: admin, channel: 'web', trigger: 'manual', resend: { reason: 'Corrección' } })
+    // y se puede reenviar la ya enviada, con motivo
+    const forced = await sendNovedad({ recordId: sent.id, actor: viewer, channel: 'web', trigger: 'manual', resend: { reason: 'Corrección' } })
     assert.equal(forced.status, 'sent')
   } finally {
     await prisma.field.delete({ where: { id: btn.id } })

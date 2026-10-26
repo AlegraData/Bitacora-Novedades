@@ -77,7 +77,7 @@ test('guardia: toda acción de servidor de correo-admin exige ADMIN antes de hac
   const files = readdirSync(dir).filter((f) => /^email-admin.*\.ts$/.test(f))
   assert.ok(files.length >= 1)
   for (const f of files) {
-    const src = readFileSync(join(dir, f), 'utf8')
+    const src = readFileSync(join(dir, f), 'utf8').replace(/\r\n/g, '\n') // en Windows el checkout puede traer CRLF
     assert.ok(src.startsWith("'use server'"), `${f} debe ser 'use server'`)
     const chunks = src.split(/\nexport async function /).slice(1)
     assert.ok(chunks.length > 0)

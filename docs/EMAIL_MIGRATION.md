@@ -11,7 +11,7 @@ Alegra, y muestra en pantalla, MCP y API si se envió o por qué falló.
 - **Validación** (los mismos campos de antes): título, breve descripción, fecha de lanzamiento, fecha real
   de producción, responsables y al menos un correo válido en «Correos a comunicar». Solo Novedad / Pre-novedad.
 - **Una sola comunicación por novedad**, garantizada en la base de datos (`EmailDelivery.lockKey`). Reenviar
-  solo lo puede hacer un ADMIN, con motivo.
+  lo puede hacer cualquier usuario, con aviso de «ya se comunicó» y un motivo obligatorio que queda en el historial.
 - **Direcciones inválidas**: se envía a las válidas y se avisa cuáles se omitieron.
 - **Plantilla** editable en Admin → Correos → Plantilla (Handlebars, con versiones). Lo opcional va en
   `{{#if campo}}…{{/if}}`: si falta, no sale en el correo.
@@ -101,7 +101,7 @@ muestra filas inválidas o novedades que no existen en la base, revísalas antes
 | Código | Significa | Qué hacer |
 |---|---|---|
 | `VALIDATION` | Faltan datos obligatorios (la respuesta trae la lista) | Completar la novedad |
-| `DUPLICATE` | Ya se comunicó (dice quién y cuándo) | Solo un ADMIN puede reenviar, con motivo |
+| `DUPLICATE` | Ya se comunicó (dice quién y cuándo) | Cualquier usuario puede reenviar, con aviso y motivo obligatorio (10 a 500 caracteres) |
 | `IN_PROGRESS` | Hay otro envío en curso | Esperar unos segundos |
 | `SMTP_NOT_CONFIGURED` | Falta `SMTP_HOST`, `SMTP_USER` o `SMTP_PASS` | Ver Configuración en Cloud Run |
 | `SMTP_AUTH` | Usuario o contraseña de aplicación inválidos | Regenerar la contraseña de aplicación |

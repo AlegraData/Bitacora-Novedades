@@ -107,24 +107,30 @@ test('un fallo de SMTP se reporta con motivo, libera el lock y permite reintenta
   assert.equal((await listMessages()).length, 1)
 })
 
-test('reenvío: solo ADMIN y con motivo; el envío anterior queda en el historial', async () => {
+test('reenvío: cualquier usuario, pero con motivo obligatorio; el envío anterior queda en el historial', async () => {
   const r = await makeRecord()
   await send(r.id)
 
-  const denied = await send(r.id, { resend: { reason: 'corrección' } })
-  assert.equal(denied.error?.code, 'FORBIDDEN')
-  const noReason = await send(r.id, { actor: admin, resend: { reason: '  ' } })
-  assert.equal(noReason.error?.code, 'VALIDATION')
+  // sin motivo, con motivo en blanco o demasiado corto: no sale nada
+  for (const reason of ['  ', 'x', 'corregir', 'a'.repeat(501)]) {
+    const bad = await send(r.id, { resend: { reason } })
+    assert.equal(bad.error?.code, 'VALIDATION', reason.slice(0, 10))
+  }
+  const noReasonAdmin = await send(r.id, { actor: admin, resend: { reason: '  ' } })
+  assert.equal(noReasonAdmin.error?.code, 'VALIDATION')
   assert.equal((await listMessages()).length, 1)
 
-  const ok = await send(r.id, { actor: admin, resend: { reason: 'Corrección de la fecha' } })
+  // un usuario normal (no ADMIN) sí puede reenviar si explica por qué
+  const ok = await send(r.id, { resend: { reason: '  Corrección de la fecha  ' } })
   assert.equal(ok.status, 'sent')
   assert.equal((await listMessages()).length, 2)
   assert.equal(await prisma.emailDelivery.count({ where: { recordId: r.id, status: 'sent' } }), 2)
   assert.equal(await prisma.emailDelivery.count({ where: { lockKey: `novedad:${r.id}` } }), 1, 'solo el último tiene el lock')
   const audit = await prisma.auditLog.findFirstOrThrow({ where: { action: 'EMAIL_RESEND' } })
-  assert.equal((audit.details as Record<string, unknown>).reason, 'Corrección de la fecha')
-  // y después de reenviar, otro intento sin permiso sigue bloqueado
+  assert.equal((audit.details as Record<string, unknown>).reason, 'Corrección de la fecha', 'el motivo se guarda limpio')
+  assert.equal(audit.userEmail, viewer.email, 'queda quién reenvió')
+  assert.equal((await prisma.emailDelivery.findFirstOrThrow({ where: { lockKey: `novedad:${r.id}` } })).resendReason, 'Corrección de la fecha')
+  // y después de reenviar, un nuevo intento sin motivo sigue bloqueado como duplicado
   assert.equal((await send(r.id)).error?.code, 'DUPLICATE')
 })
 
@@ -339,7 +345,7 @@ test('registros ya comunicados con la versión anterior (NOTIFIED_PMKT) cuentan 
   assert.equal(dup.error?.code, 'DUPLICATE')
   assert.equal((await send(r.id, { trigger: 'auto' })).skippedReason, 'ya_enviado')
   assert.equal((await listMessages()).length, 0)
-  // un ADMIN sí puede reenviarlo
+  // con motivo sí puede reenviarse
   assert.equal((await send(r.id, { actor: admin, resend: { reason: 'reenvío tras migración' } })).status, 'sent')
 })
 

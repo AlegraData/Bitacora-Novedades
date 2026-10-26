@@ -13,7 +13,7 @@ import { getSmtpConfig, sendMail, smtpStatus, MAX_RECIPIENTS } from './transport
 import { sendChatCard } from './chat'
 import { ensureChatIds, toMentions } from './chat-ids'
 import type { NotifyRecipient } from './recipients'
-import { evaluateCommunication, COMMUNICATION_SINCE, BASE_REQUIRED_FIELDS } from './communication'
+import { evaluateCommunication, COMMUNICATION_SINCE, BASE_REQUIRED_FIELDS, normalizeResendReason, MIN_RESEND_REASON, MAX_RESEND_REASON } from './communication'
 
 // TMDIAPD-56: se comunican TODOS los tipos de novedad. El envío automático solo aplica a registros
 // creados desde el despliegue (ver COMMUNICATION_SINCE): no se dispara nada retroactivo.
@@ -146,8 +146,10 @@ export async function sendNovedad(opts: SendOptions): Promise<SendResult> {
   if (auto && raw.createdAt < AUTO_NOTIFY_SINCE) return skipped('registro_anterior_al_cutover')
 
   if (opts.resend) {
-    if (opts.actor.role !== 'ADMIN') return failure('FORBIDDEN', 'Solo un ADMIN puede reenviar una novedad ya comunicada.')
-    if (!opts.resend.reason?.trim()) return failure('VALIDATION', 'Para reenviar indica el motivo.')
+    // Cualquier usuario puede reenviar, pero deja el motivo escrito (queda en el historial y la auditoría).
+    const reason = normalizeResendReason(opts.resend.reason)
+    if (!reason) return failure('VALIDATION', `Para reenviar explica el motivo (entre ${MIN_RESEND_REASON} y ${MAX_RESEND_REASON} caracteres).`)
+    opts.resend = { reason }
   }
 
   // Validación: obligatorios para todos los tipos + «¿Trae video?» (y Video si es Sí).
