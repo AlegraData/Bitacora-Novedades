@@ -32,7 +32,7 @@ export function CommunicationStatus({ data, fields, createdAt, done }: { data: R
 
   if (done) {
     tone = { bg: '#f0fdf4', border: '#86efac', color: '#166534' }
-    text = <>✅ <b>Comunicada.</b> Para volver a enviarla hace falta un ADMIN.</>
+    text = <>✅ <b>Comunicada.</b> Si hace falta volver a enviarla, se pide el motivo y queda registrado.</>
   } else if (new Date(createdAt) < COMMUNICATION_SINCE) {
     text = <>Registro anterior al envío automático: no se comunica sola. Puedes enviarla manualmente.</>
   } else {

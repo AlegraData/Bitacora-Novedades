@@ -1,7 +1,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { renderToString as render } from 'react-dom/server'
-import { EmailResultBanner, EmailPreviewModal, EmailHistory } from '@/components/email/email-panels'
+import { EmailResultBanner, EmailPreviewModal, EmailHistory, ResendDialog } from '@/components/email/email-panels'
 import type { SendResult } from '@/lib/email/service'
 
 const noop = () => {}
@@ -73,21 +73,31 @@ test('historial: cerrado por defecto (no consulta nada hasta que se abre)', () =
   assert.ok(!h.includes('Cargando'))
 })
 
-test('duplicado: el ADMIN ve «Reenviar como ADMIN» (aunque el botón de la novedad esté en «No»); el usuario normal no', () => {
-  const dup: SendResult = { ok: false, status: 'failed', error: { code: 'DUPLICATE', message: 'Esta novedad ya se comunicó antes. Solo un ADMIN puede reenviarla.', previous: { deliveryId: 'legacy:1', sentAt: '2026-10-16T21:18:53Z', by: 'juan.alvarez@alegra.com' } } }
+test('duplicado: cualquier usuario ve «Reenviar indicando el motivo» (aunque el botón de la novedad esté en «No»)', () => {
+  const dup: SendResult = { ok: false, status: 'failed', error: { code: 'DUPLICATE', message: 'Esta novedad ya se comunicó antes.', previous: { deliveryId: 'legacy:1', sentAt: '2026-10-16T21:18:53Z', by: 'juan.alvarez@alegra.com' } } }
   const withResend = (isAdmin: boolean) => html(<EmailResultBanner result={dup} isAdmin={isAdmin} onClose={noop} onResend={noop} />)
 
-  const admin = withResend(true)
-  assert.ok(admin.includes('Reenviar como ADMIN'))
-  assert.ok(admin.includes('Como ADMIN puedes reenviarla indicando el motivo'))
-  assert.ok(admin.includes('juan.alvarez@alegra.com'), 'sigue diciendo quién lo envió antes')
+  for (const isAdmin of [true, false]) {
+    const h = withResend(isAdmin)
+    assert.ok(h.includes('Reenviar indicando el motivo'), `isAdmin=${isAdmin}`)
+    assert.ok(h.includes('puedes reenviarla indicando el motivo'))
+    assert.ok(!h.includes('ADMIN'), 'ya no depende del rol')
+    assert.ok(h.includes('juan.alvarez@alegra.com'), 'sigue diciendo quién lo envió antes')
+  }
 
-  const user = withResend(false)
-  assert.ok(!user.includes('Reenviar como ADMIN'))
-  assert.ok(user.includes('Solo un ADMIN puede reenviarla'))
-
-  // sin handler (p. ej. el aviso del auto-guardado) no hay botón aunque sea ADMIN
-  assert.ok(!html(<EmailResultBanner result={dup} isAdmin onClose={noop} />).includes('Reenviar como ADMIN'))
+  // sin handler (p. ej. el aviso del auto-guardado) no hay botón
+  assert.ok(!html(<EmailResultBanner result={dup} isAdmin onClose={noop} />).includes('Reenviar indicando'))
   // otros errores no ofrecen reenvío
-  assert.ok(!html(<EmailResultBanner result={{ ok: false, status: 'failed', error: { code: 'VALIDATION', message: 'x' } }} isAdmin onClose={noop} onResend={noop} />).includes('Reenviar como ADMIN'))
+  assert.ok(!html(<EmailResultBanner result={{ ok: false, status: 'failed', error: { code: 'VALIDATION', message: 'x' } }} isAdmin onClose={noop} onResend={noop} />).includes('Reenviar indicando'))
+})
+
+test('diálogo de reenvío: avisa que ya se comunicó, quién/cuándo, y exige el motivo', () => {
+  const h = html(<ResendDialog title="Mi novedad" sentAt="2026-10-21T21:30:31Z" by="alejandra@alegra.com" onConfirm={noop} onCancel={noop} />)
+  assert.ok(h.includes('Esta novedad ya se comunicó'))
+  assert.ok(h.includes('alejandra@alegra.com'))
+  assert.ok(h.includes('Mi novedad'))
+  assert.ok(h.includes('otro correo y otra tarjeta'))
+  assert.ok(h.includes('¿Por qué se va a volver a enviar?'))
+  assert.ok(h.includes('Mínimo 10 caracteres'))
+  assert.ok(/<button[^>]*disabled[^>]*>↺ Reenviar de todos modos/.test(h), 'sin motivo el botón de confirmar está deshabilitado')
 })

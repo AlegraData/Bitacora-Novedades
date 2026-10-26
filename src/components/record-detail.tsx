@@ -5,7 +5,7 @@ import type { Field, BitacoraRecord, Tag, Role, RecordData, Block } from '@/type
 import { PersonPicker } from './person-picker'
 import { MultiSelectDropdown } from './multi-select-dropdown'
 import { sendRecordEmail } from '@/lib/actions/email'
-import { EmailResultBanner, EmailPreviewModal, EmailHistory } from '@/components/email/email-panels'
+import { EmailResultBanner, EmailPreviewModal, EmailHistory, ResendDialog } from '@/components/email/email-panels'
 import type { SendResult } from '@/lib/email/service'
 import { CommunicationStatus } from '@/components/email/communication-status'
 import ReactMarkdown from 'react-markdown'
@@ -55,6 +55,7 @@ export function RecordDetail({ record, fields, tags, userRole, onSave, onClose, 
   const [isPending, startTransition] = useTransition()
   const [sendingEmail, setSendingEmail] = useState(false)
   const [emailResult, setEmailResult] = useState<{ field: Field; result: SendResult } | null>(null)
+  const [resendAsk, setResendAsk] = useState<{ field: Field; sentAt: string | null } | null>(null)
   const [emailPreview, setEmailPreview] = useState<SendResult | null>(null)
   const [historyKey, setHistoryKey] = useState(0)
 
@@ -90,13 +91,13 @@ export function RecordDetail({ record, fields, tags, userRole, onSave, onClose, 
     return true  // All roles can edit by default
   }
 
-  const handleTriggerButton = useCallback(async (field: Field, opts: { simulate?: boolean; forceResend?: boolean } = {}) => {
-    let resendReason: string | undefined
-    if (!opts.simulate && (opts.forceResend || Boolean(formData[field.id]))) {
-      if (userRole !== 'ADMIN') return
-      const reason = window.prompt('Esta novedad ya se comunicó. Indica el motivo del reenvío:')
-      if (!reason?.trim()) return
-      resendReason = reason.trim()
+  const handleTriggerButton = useCallback(async (field: Field, opts: { simulate?: boolean; forceResend?: boolean; resendReason?: string } = {}) => {
+    const resendReason = opts.resendReason
+    if (!opts.simulate && !resendReason && (opts.forceResend || Boolean(formData[field.id]))) {
+      // Ya se comunicó: primero se avisa y se pide el motivo (queda en el historial).
+      const sent = formData[field.id]
+      setResendAsk({ field, sentAt: typeof sent === 'string' ? sent : null })
+      return
     }
     setSendingEmail(true)
     setEmailResult(null)
@@ -117,7 +118,7 @@ export function RecordDetail({ record, fields, tags, userRole, onSave, onClose, 
     } finally {
       setSendingEmail(false)
     }
-  }, [record.id, formData, blocks, onSave, userRole])
+  }, [record.id, formData, blocks, onSave])
 
   function setField(fieldId: string, value: unknown) {
     setFormData((prev) => {
@@ -432,15 +433,14 @@ export function RecordDetail({ record, fields, tags, userRole, onSave, onClose, 
                       </button>
                       <button
                         onClick={() => handleTriggerButton(field)}
-                        disabled={sendingEmail || (executed && userRole !== 'ADMIN')}
-                        title={executed && userRole !== 'ADMIN' ? 'Ya se comunicó. Solo un ADMIN puede reenviarlo.' : undefined}
+                        disabled={sendingEmail}
+                        title={executed ? 'Ya se comunicó. Puedes reenviarla indicando el motivo.' : undefined}
                         style={{
                           padding: '8px 16px', borderRadius: 8, fontSize: 13, fontWeight: 600,
                           background: executed ? '#fff' : '#E0F7F4',
                           color: executed ? '#475569' : '#00A888',
                           border: `1px solid ${executed ? '#e2e8f0' : '#00C4A0'}`,
-                          cursor: sendingEmail || (executed && userRole !== 'ADMIN') ? 'default' : 'pointer',
-                          opacity: executed && userRole !== 'ADMIN' ? 0.5 : 1,
+                          cursor: sendingEmail ? 'default' : 'pointer',
                           boxShadow: '0 1px 2px rgba(0,0,0,0.05)',
                         }}
                       >
@@ -464,6 +464,18 @@ export function RecordDetail({ record, fields, tags, userRole, onSave, onClose, 
               )}
               <EmailHistory recordId={record.id} refreshKey={historyKey} />
             </div>
+          )}
+          {resendAsk && (
+            <ResendDialog
+              title={String(formData[dataFields.find((f) => f.name.toLowerCase().trim() === 'título' || f.name.toLowerCase().trim() === 'titulo')?.id ?? ''] ?? '')}
+              sentAt={resendAsk.sentAt}
+              onCancel={() => setResendAsk(null)}
+              onConfirm={(reason) => {
+                const { field } = resendAsk
+                setResendAsk(null)
+                handleTriggerButton(field, { resendReason: reason })
+              }}
+            />
           )}
           {emailPreview && <EmailPreviewModal result={emailPreview} onClose={() => setEmailPreview(null)} />}
 

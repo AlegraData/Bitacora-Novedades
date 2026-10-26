@@ -5,6 +5,7 @@ import type { SendResult } from '@/lib/email/service'
 import type { DeliveryDTO } from '@/lib/email/history'
 import { ERROR_TITLES, type EmailErrorCode } from '@/lib/email/errors'
 import { getRecordEmailHistory } from '@/lib/actions/email'
+import { MIN_RESEND_REASON, MAX_RESEND_REASON } from '@/lib/email/communication'
 
 const RETRYABLE: EmailErrorCode[] = ['SMTP_AUTH', 'CONNECTION', 'TIMEOUT', 'RATE_LIMIT', 'WEBHOOK', 'UNKNOWN', 'IN_PROGRESS', 'MESSAGE_REJECTED', 'RECIPIENT_REJECTED']
 
@@ -24,6 +25,56 @@ function list(items: string[] | undefined) {
   return items && items.length ? items.join(', ') : '—'
 }
 
+/**
+ * Aviso de «esta novedad ya se comunicó» + motivo obligatorio antes de reenviar.
+ * El motivo queda en el historial de envíos y en la auditoría.
+ */
+export function ResendDialog({ title, sentAt, by, onConfirm, onCancel }: {
+  title?: string
+  sentAt?: string | null
+  by?: string | null
+  onConfirm: (reason: string) => void
+  onCancel: () => void
+}) {
+  const [reason, setReason] = useState('')
+  const clean = reason.trim()
+  const valid = clean.length >= MIN_RESEND_REASON && clean.length <= MAX_RESEND_REASON
+  return (
+    <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', zIndex: 90, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}>
+      <div role="dialog" aria-modal="true" aria-label="Reenviar novedad" style={{ background: '#fff', borderRadius: 12, width: '100%', maxWidth: 480, padding: 20, fontSize: 13, lineHeight: 1.5, color: '#334155' }}>
+        <div style={{ padding: '10px 12px', borderRadius: 8, background: '#fffbeb', border: '1px solid #fcd34d', color: '#92400e' }}>
+          ⚠ <b>Esta novedad ya se comunicó{sentAt ? ` el ${new Date(sentAt).toLocaleString('es-CO')}` : ''}{by ? ` (${by})` : ''}.</b>{' '}
+          Si la reenvías, los destinatarios recibirán otro correo y otra tarjeta en el canal de Chat.
+        </div>
+        {title && <div style={{ marginTop: 10 }}><b>Novedad:</b> {title}</div>}
+        <label style={{ display: 'block', marginTop: 12, fontWeight: 600 }}>
+          ¿Por qué se va a volver a enviar?
+          <textarea
+            value={reason}
+            onChange={(e) => setReason(e.target.value)}
+            maxLength={MAX_RESEND_REASON}
+            rows={3}
+            autoFocus
+            placeholder="Ej.: el primer correo salió incompleto, se corrigió la fecha de lanzamiento…"
+            style={{ display: 'block', width: '100%', marginTop: 4, padding: 8, borderRadius: 6, border: '1px solid #cbd5e1', fontSize: 13, fontFamily: 'inherit', resize: 'vertical', boxSizing: 'border-box' }}
+          />
+        </label>
+        <div style={{ fontSize: 11, color: '#64748b', marginTop: 2 }}>Mínimo {MIN_RESEND_REASON} caracteres. Queda registrado con tu nombre en el historial de envíos.</div>
+        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 14 }}>
+          <button onClick={onCancel} style={smallBtn}>Cancelar</button>
+          <button
+            onClick={() => valid && onConfirm(clean)}
+            disabled={!valid}
+            style={{ ...smallBtn, background: valid ? '#1e2a3a' : '#e2e8f0', color: valid ? '#fff' : '#94a3b8', border: 'none', cursor: valid ? 'pointer' : 'default' }}
+          >
+            ↺ Reenviar de todos modos
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 /** Resultado de un envío: qué pasó, a quién, y si falló, por qué (con lo que hay que corregir). */
 export function EmailResultBanner({
   result,
@@ -37,8 +88,9 @@ export function EmailResultBanner({
   onClose: () => void
   onRetry?: () => void
   onPreview?: () => void
-  /** Solo ADMIN: reenviar algo ya comunicado (pide el motivo). */
+  /** Reenviar algo ya comunicado (pide el motivo). */
   onResend?: () => void
+  /** Solo para el detalle técnico de los errores. */
   isAdmin: boolean
 }) {
   const [showDetail, setShowDetail] = useState(false)
@@ -83,7 +135,7 @@ export function EmailResultBanner({
 
       {err && (
         <div style={{ marginTop: 6 }}>
-          <div>{err.code === 'DUPLICATE' && isAdmin ? 'Esta novedad ya se comunicó antes. Como ADMIN puedes reenviarla indicando el motivo.' : err.message}</div>
+          <div>{err.code === 'DUPLICATE' ? 'Esta novedad ya se comunicó antes. Si hace falta, puedes reenviarla indicando el motivo.' : err.message}</div>
           {err.missingFields && err.missingFields.length > 0 && (
             <div style={{ marginTop: 4 }}>
               <b>Completa estos campos:</b>
@@ -110,7 +162,7 @@ export function EmailResultBanner({
       <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
         {result.status === 'simulated' && onPreview && <button onClick={onPreview} style={smallBtn}>Ver el correo</button>}
         {result.status === 'failed' && err && RETRYABLE.includes(err.code) && onRetry && <button onClick={onRetry} style={smallBtn}>↻ Reintentar</button>}
-        {result.status === 'failed' && err?.code === 'DUPLICATE' && isAdmin && onResend && <button onClick={onResend} style={{ ...smallBtn, background: '#1e2a3a', color: '#fff', border: 'none' }}>↺ Reenviar como ADMIN</button>}
+        {result.status === 'failed' && err?.code === 'DUPLICATE' && onResend && <button onClick={onResend} style={{ ...smallBtn, background: '#1e2a3a', color: '#fff', border: 'none' }}>↺ Reenviar indicando el motivo</button>}
       </div>
     </div>
   )

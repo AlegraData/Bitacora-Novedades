@@ -6,7 +6,7 @@ import { saveRecord, deleteRecord } from '@/lib/actions/records'
 import { saveField, deleteField, reorderFields } from '@/lib/actions/fields'
 import { saveTag, deleteTag } from '@/lib/actions/tags'
 import { sendRecordEmail } from '@/lib/actions/email'
-import { EmailResultBanner, EmailPreviewModal } from '@/components/email/email-panels'
+import { EmailResultBanner, EmailPreviewModal, ResendDialog } from '@/components/email/email-panels'
 import type { SendResult } from '@/lib/email/service'
 import { PendingChip, pendingFor } from '@/components/email/communication-status'
 import { saveView, deleteView } from '@/lib/actions/views'
@@ -317,15 +317,13 @@ interface RecordsTableProps {
   initialRecordId?: string
 }
 
-function ButtonCell({ done, missing, sending, isAdmin, onSend, onPreview }: {
+function ButtonCell({ done, missing, sending, onSend, onPreview }: {
   done: boolean
   missing: string[] | null
   sending: boolean
-  isAdmin: boolean
   onSend: () => void
   onPreview: () => void
 }) {
-  const locked = done && !isAdmin // ya comunicado: solo un ADMIN puede reenviar
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
       <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, padding: '3px 8px', borderRadius: 12, fontSize: 11, fontWeight: 600, background: done ? '#dcfce7' : '#f1f5f9', color: done ? '#166534' : '#64748b', border: `1px solid ${done ? '#86efac' : '#e2e8f0'}` }}>
@@ -333,9 +331,9 @@ function ButtonCell({ done, missing, sending, isAdmin, onSend, onPreview }: {
       </span>
       <button
         onClick={onSend}
-        disabled={sending || locked}
-        title={locked ? 'Ya se comunicó. Solo un ADMIN puede reenviarlo.' : undefined}
-        style={{ padding: '3px 8px', fontSize: 11, fontWeight: 500, background: done ? '#f8fafc' : '#E0F7F4', color: done ? '#475569' : '#00A888', border: `1px solid ${done ? '#e2e8f0' : '#00C4A0'}`, borderRadius: 6, cursor: sending || locked ? 'default' : 'pointer', whiteSpace: 'nowrap', opacity: locked ? 0.5 : 1 }}
+        disabled={sending}
+        title={done ? 'Ya se comunicó. Puedes reenviarla indicando el motivo.' : undefined}
+        style={{ padding: '3px 8px', fontSize: 11, fontWeight: 500, background: done ? '#f8fafc' : '#E0F7F4', color: done ? '#475569' : '#00A888', border: `1px solid ${done ? '#e2e8f0' : '#00C4A0'}`, borderRadius: 6, cursor: sending ? 'default' : 'pointer', whiteSpace: 'nowrap' }}
       >
         {sending ? '⏳ Enviando…' : done ? '↺ Reenviar' : '⚡ Ejecutar'}
       </button>
@@ -371,6 +369,7 @@ export function RecordsTable({
   const isApplyingViewRef = useRef(false)
   const [isPending, startTransition] = useTransition()
   const [sendingId, setSendingId] = useState<string | null>(null)
+  const [resendAsk, setResendAsk] = useState<{ record: BitacoraRecord; field: Field; sentAt: string | null } | null>(null)
   const [emailBanner, setEmailBanner] = useState<{ record: BitacoraRecord; field: Field | null; result: SendResult } | null>(null)
   const [emailPreview, setEmailPreview] = useState<SendResult | null>(null)
 
@@ -688,7 +687,7 @@ export function RecordsTable({
     })
   }, [])
 
-  const handleTriggerButton = useCallback(async (record: BitacoraRecord, field: Field, opts: { simulate?: boolean; forceResend?: boolean } = {}) => {
+  const handleTriggerButton = useCallback(async (record: BitacoraRecord, field: Field, opts: { simulate?: boolean; forceResend?: boolean; resendReason?: string } = {}) => {
     // Validar campos requeridos antes de enviar
     const btnConfig = field.config as { sendAllFields?: boolean; selectedFieldIds?: string[] } | null
     if (btnConfig?.sendAllFields === false && (btnConfig.selectedFieldIds?.length ?? 0) > 0) {
@@ -703,12 +702,12 @@ export function RecordsTable({
         return
       }
     }
-    let resendReason: string | undefined
-    if (!opts.simulate && (opts.forceResend || Boolean(record.data[field.id]))) {
-      if (userRole !== 'ADMIN') return
-      const reason = window.prompt('Esta novedad ya se comunicó. Indica el motivo del reenvío:')
-      if (!reason?.trim()) return
-      resendReason = reason.trim()
+    const resendReason = opts.resendReason
+    if (!opts.simulate && !resendReason && (opts.forceResend || Boolean(record.data[field.id]))) {
+      // Ya se comunicó: primero se avisa y se pide el motivo (queda en el historial).
+      const sent = record.data[field.id]
+      setResendAsk({ record, field, sentAt: typeof sent === 'string' ? sent : null })
+      return
     }
     setSendingId(record.id)
     setEmailBanner(null)
@@ -725,7 +724,7 @@ export function RecordsTable({
     } finally {
       setSendingId(null)
     }
-  }, [fields_, userRole])
+  }, [fields_])
 
   const toggleAll = () => {
     if (selectedIds.size === filteredRecords.length) {
@@ -1164,13 +1163,13 @@ export function RecordsTable({
                       const isLastSticky = i === pinnedFields.length - 1
                       return (
                         <td key={field.id} style={{ ...tdStyle, position: 'sticky', left: stickyLefts[fixedCount + i] ?? 0, zIndex: 2, background: stickyBg, boxShadow: isLastSticky ? '4px 0 8px -2px rgba(0,196,160,0.25)' : undefined }}>
-                          {field.type === 'button' ? <ButtonCell done={Boolean(record.data[field.id])} missing={pendingFor(record.data, fields_, record.createdAt, Boolean(record.data[field.id]))} sending={sendingId === record.id} isAdmin={userRole === 'ADMIN'} onSend={() => handleTriggerButton(record, field)} onPreview={() => handleTriggerButton(record, field, { simulate: true })} /> : field.id === titleFieldId ? <TitleCell record={record} field={field} onClick={() => setDetailRecord(record)} /> : <CellValue field={field} value={record.data[field.id]} allTags={tags} />}
+                          {field.type === 'button' ? <ButtonCell done={Boolean(record.data[field.id])} missing={pendingFor(record.data, fields_, record.createdAt, Boolean(record.data[field.id]))} sending={sendingId === record.id} onSend={() => handleTriggerButton(record, field)} onPreview={() => handleTriggerButton(record, field, { simulate: true })} /> : field.id === titleFieldId ? <TitleCell record={record} field={field} onClick={() => setDetailRecord(record)} /> : <CellValue field={field} value={record.data[field.id]} allTags={tags} />}
                         </td>
                       )
                     })}
                     {nonPinnedFields.map((field) => (
                       <td key={field.id} style={{ ...tdStyle }}>
-                        {field.type === 'button' ? <ButtonCell done={Boolean(record.data[field.id])} missing={pendingFor(record.data, fields_, record.createdAt, Boolean(record.data[field.id]))} sending={sendingId === record.id} isAdmin={userRole === 'ADMIN'} onSend={() => handleTriggerButton(record, field)} onPreview={() => handleTriggerButton(record, field, { simulate: true })} /> : field.id === titleFieldId ? <TitleCell record={record} field={field} onClick={() => setDetailRecord(record)} /> : <CellValue field={field} value={record.data[field.id]} allTags={tags} />}
+                        {field.type === 'button' ? <ButtonCell done={Boolean(record.data[field.id])} missing={pendingFor(record.data, fields_, record.createdAt, Boolean(record.data[field.id]))} sending={sendingId === record.id} onSend={() => handleTriggerButton(record, field)} onPreview={() => handleTriggerButton(record, field, { simulate: true })} /> : field.id === titleFieldId ? <TitleCell record={record} field={field} onClick={() => setDetailRecord(record)} /> : <CellValue field={field} value={record.data[field.id]} allTags={tags} />}
                       </td>
                     ))}
                   </tr>
@@ -1258,6 +1257,17 @@ export function RecordsTable({
             onResend={emailBanner.field ? () => handleTriggerButton(emailBanner.record, emailBanner.field!, { forceResend: true }) : undefined}
           />
         </div>
+      )}
+      {resendAsk && (
+        <ResendDialog
+          sentAt={resendAsk.sentAt}
+          onCancel={() => setResendAsk(null)}
+          onConfirm={(reason) => {
+            const { record, field } = resendAsk
+            setResendAsk(null)
+            handleTriggerButton(record, field, { resendReason: reason })
+          }}
+        />
       )}
       {emailPreview && <EmailPreviewModal result={emailPreview} onClose={() => setEmailPreview(null)} />}
 
