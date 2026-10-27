@@ -48,12 +48,12 @@ test('modo live: envía por SMTP a los destinatarios de la notificación, regist
   assert.equal(res.ok, true)
   assert.equal(res.status, 'sent')
   assert.equal(res.mode, 'live')
-  assert.deepEqual(res.recipients?.sort(), ['cristian.albornoz@alegra.com', 'cristian.bautista@alegra.com', 'valentina.garcia@alegra.com'])
+  assert.deepEqual(res.recipients, ['tm-alegra@alegra.com'])
 
   const [m] = await listMessages()
   const mail = await getMessage(m.ID)
   assert.equal(mail.Subject, 'Novedad | Alegra POS - Facturación masiva')
-  assert.deepEqual(mail.To.map((t) => t.Address).sort(), ['cristian.albornoz@alegra.com', 'cristian.bautista@alegra.com', 'valentina.garcia@alegra.com'])
+  assert.deepEqual(mail.To.map((t) => t.Address), ['tm-alegra@alegra.com'])
   assert.match(mail.HTML, /Ahora puedes facturar en lote\./)
 
   const d = await prisma.emailDelivery.findUniqueOrThrow({ where: { id: res.deliveryId } })
@@ -154,14 +154,16 @@ test('«Correos a comunicar» (vacío, inválido o con otros) es informativo: no
     const r = await makeRecord({ correosAComunicar: correos })
     const res = await send(r.id)
     assert.equal(res.status, 'sent', JSON.stringify(correos))
-    assert.deepEqual(res.recipients?.sort(), ['cristian.albornoz@alegra.com', 'cristian.bautista@alegra.com', 'valentina.garcia@alegra.com'])
+    assert.deepEqual(res.recipients, ['tm-alegra@alegra.com'])
     assert.equal(res.warnings?.length ?? 0, 0)
   }
 })
 
-test('todos los tipos se comunican (TMDIAPD-56): ya no hay tipos que no apliquen', async () => {
-  const r = await makeRecord({ tipo: 'Mejora técnica' })
-  assert.equal((await send(r.id, { trigger: 'auto' })).status, 'sent')
+test('solo se comunican Novedad y Pre-novedad; los demás tipos se omiten y un id inexistente da NOT_FOUND', async () => {
+  const mejora = await makeRecord({ tipo: 'Mejora técnica' })
+  assert.equal((await send(mejora.id, { trigger: 'auto' })).skippedReason, 'tipo_no_comunicable')
+  const pre = await makeRecord({ tipo: 'Pre-novedad' })
+  assert.equal((await send(pre.id, { trigger: 'auto' })).status, 'sent')
   assert.equal((await send('no-existe')).error?.code, 'NOT_FOUND')
 })
 

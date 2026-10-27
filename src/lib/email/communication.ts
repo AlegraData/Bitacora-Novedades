@@ -9,6 +9,14 @@ import { LOGICAL_FIELD_NAMES } from '@/lib/field-names'
  */
 export const COMMUNICATION_SINCE = new Date('2026-10-23T00:38:00.000Z')
 
+/**
+ * Tipos que se comunican a PMKT (decisión final de PMKT). Los demás (Mejora, Experimento, Novedades pequeñas…)
+ * no se envían ni automática ni manualmente. Para abrir otro tipo en el futuro basta con agregarlo aquí.
+ */
+export const COMMUNICABLE_TIPOS = ['Novedad', 'Pre-novedad']
+
+export const TIPO_NO_COMUNICABLE = 'Este tipo de novedad no se comunica a PMKT: solo se envían las Novedades y las Pre-novedades.'
+
 export const MISSING_TRAE_VIDEO = '¿Trae video? (elige Sí o No)'
 export const MISSING_VIDEO = 'Video (marcaste «¿Trae video?» = Sí)'
 
@@ -33,6 +41,13 @@ function norm(v: unknown): string {
     .replace(/[̀-ͯ]/g, '')
     .trim()
     .toLowerCase()
+}
+
+/** ¿El tipo se comunica? Compara sin tildes, mayúsculas ni guiones («Pre novedad» y «Pre-novedad» son el mismo). */
+export function isCommunicableTipo(tipo: unknown): boolean {
+  const key = (v: unknown) => norm(v).replace(/[-_\s]+/g, ' ')
+  const t = key(Array.isArray(tipo) ? tipo[0] : tipo)
+  return t !== '' && COMMUNICABLE_TIPOS.some((c) => key(c) === t)
 }
 
 /** «Sí» / «No» del campo «¿Trae video?» (acepta mayúsculas, tildes y booleanos). null = sin elegir. */

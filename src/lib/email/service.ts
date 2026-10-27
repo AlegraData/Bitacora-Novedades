@@ -13,10 +13,10 @@ import { getSmtpConfig, sendMail, smtpStatus, MAX_RECIPIENTS } from './transport
 import { sendChatCard } from './chat'
 import { ensureChatIds, toMentions } from './chat-ids'
 import type { NotifyRecipient } from './recipients'
-import { evaluateCommunication, COMMUNICATION_SINCE, BASE_REQUIRED_FIELDS, normalizeResendReason, MIN_RESEND_REASON, MAX_RESEND_REASON } from './communication'
+import { evaluateCommunication, COMMUNICATION_SINCE, BASE_REQUIRED_FIELDS, isCommunicableTipo, TIPO_NO_COMUNICABLE, normalizeResendReason, MIN_RESEND_REASON, MAX_RESEND_REASON } from './communication'
 
-// TMDIAPD-56: se comunican TODOS los tipos de novedad. El envío automático solo aplica a registros
-// creados desde el despliegue (ver COMMUNICATION_SINCE): no se dispara nada retroactivo.
+// Se comunican solo las Novedades y Pre-novedades (ver COMMUNICABLE_TIPOS). El envío automático solo aplica a
+// registros creados desde el despliegue (ver COMMUNICATION_SINCE): no se dispara nada retroactivo.
 export const AUTO_NOTIFY_SINCE = COMMUNICATION_SINCE
 
 /** Campos obligatorios para comunicar (más «¿Trae video?» y, si es Sí, «Video»: ver evaluateCommunication). */
@@ -145,6 +145,11 @@ export async function sendNovedad(opts: SendOptions): Promise<SendResult> {
 
   if (auto && raw.createdAt < AUTO_NOTIFY_SINCE) return skipped('registro_anterior_al_cutover')
 
+  // Solo se comunican las Novedades y Pre-novedades; los demás tipos no salen (ni solos ni con el botón).
+  if (!isCommunicableTipo(logical.tipo)) {
+    return auto ? skipped('tipo_no_comunicable') : failure('VALIDATION', TIPO_NO_COMUNICABLE)
+  }
+
   if (opts.resend) {
     // Cualquier usuario puede reenviar, pero deja el motivo escrito (queda en el historial y la auditoría).
     const reason = normalizeResendReason(opts.resend.reason)
@@ -152,7 +157,7 @@ export async function sendNovedad(opts: SendOptions): Promise<SendResult> {
     opts.resend = { reason }
   }
 
-  // Validación: obligatorios para todos los tipos + «¿Trae video?» (y Video si es Sí).
+  // Validación: obligatorios + «¿Trae video?» (y Video si es Sí).
   const missingFields = evaluateCommunication(logical, { traeVideoConfigured: map.has('traeVideo') }).missing
   // Destinatarios: SOLO los configurados en el admin (TMDIAPD-56). «Correos a comunicar» es informativo.
   const settings = await getSettings()

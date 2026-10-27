@@ -1,7 +1,7 @@
 import { test, beforeEach } from 'node:test'
 import assert from 'node:assert/strict'
 import { prisma } from '@/lib/prisma'
-import { normalizeRecipients, recipientsOrDefault, RecipientsError, DEFAULT_NOTIFY_RECIPIENTS, MAX_NOTIFY_RECIPIENTS } from '@/lib/email/recipients'
+import { normalizeRecipients, recipientsOrDefault, mentionable, RecipientsError, DEFAULT_NOTIFY_RECIPIENTS, MAX_NOTIFY_RECIPIENTS } from '@/lib/email/recipients'
 import { getSettings, updateSettings } from '@/lib/email/settings'
 import { EmailSendError } from '@/lib/email/errors'
 import { sendNovedad } from '@/lib/email/service'
@@ -21,12 +21,21 @@ beforeEach(async () => {
 
 const code = (c: string) => (e: unknown) => e instanceof EmailSendError && e.info.code === c
 
-test('por defecto los destinatarios son los tres de TMDIAPD-56 (y tm-alegra no está)', async () => {
-  assert.deepEqual(DEFAULT_NOTIFY_RECIPIENTS.map((r) => r.email), ['cristian.albornoz@alegra.com', 'cristian.bautista@alegra.com', 'valentina.garcia@alegra.com'])
+test('por defecto el destinatario es el grupo tm-alegra, sin menciones (decisión final de PMKT)', async () => {
+  assert.deepEqual(DEFAULT_NOTIFY_RECIPIENTS, [{ email: 'tm-alegra@alegra.com', name: 'TM Alegra', mention: false }])
   const s = await getSettings()
   assert.equal(s.recipientsCustomized, false)
-  assert.deepEqual(s.recipients.map((r) => r.email), DEFAULT_NOTIFY_RECIPIENTS.map((r) => r.email))
-  assert.ok(!JSON.stringify(s.recipients).includes('tm-alegra'))
+  assert.deepEqual(s.recipients.map((r) => r.email), ['tm-alegra@alegra.com'])
+  assert.deepEqual(mentionable(s.recipients), [], 'a nadie se le menciona en Chat')
+})
+
+test('«Mencionar en Chat»: mention:false se conserva al guardar y mentionable() lo excluye; sin marca se menciona', async () => {
+  const r = normalizeRecipients([{ email: 'grupo@alegra.com', mention: false }, { email: 'ana@alegra.com', mention: true }, { email: 'luis@alegra.com' }, { email: 'x@alegra.com', mention: 'no' }])
+  assert.deepEqual(r, [{ email: 'grupo@alegra.com', mention: false }, { email: 'ana@alegra.com' }, { email: 'luis@alegra.com' }, { email: 'x@alegra.com' }])
+  assert.deepEqual(mentionable(r).map((x) => x.email), ['ana@alegra.com', 'luis@alegra.com', 'x@alegra.com'])
+  const saved = await updateSettings(actor, { recipients: [{ email: 'grupo@alegra.com', mention: false }, { email: 'ana@alegra.com' }] })
+  assert.deepEqual(saved.recipients, [{ email: 'grupo@alegra.com', mention: false }, { email: 'ana@alegra.com' }])
+  assert.equal((await getSettings()).recipients[0].mention, false, 'persiste')
 })
 
 test('normalizeRecipients: minúsculas, sin duplicados, nombre sin marcas de Chat, ID numérico', () => {
@@ -63,16 +72,16 @@ test('el admin guarda los destinatarios (persisten, se auditan) y rechaza listas
   assert.deepEqual((await getSettings()).recipients.map((r) => r.email), ['uno@alegra.com', 'dos@alegra.com'])
 })
 
-test('el correo va SOLO a los destinatarios configurados, aunque el registro traiga otros (p. ej. tm-alegra)', async () => {
+test('el correo va SOLO a los destinatarios configurados (tm-alegra), aunque el registro traiga otros', async () => {
   await setMode('live')
-  const r = await makeRecord({ correosAComunicar: ['tm-alegra@alegra.com', 'otro@alegra.com'] })
+  const r = await makeRecord({ correosAComunicar: ['otro@alegra.com', 'otro2@alegra.com'] })
   const res = await sendNovedad({ recordId: r.id, actor: viewer, channel: 'web', trigger: 'manual' })
   assert.equal(res.status, 'sent')
-  assert.deepEqual(res.recipients?.sort(), ['cristian.albornoz@alegra.com', 'cristian.bautista@alegra.com', 'valentina.garcia@alegra.com'])
+  assert.deepEqual(res.recipients, ['tm-alegra@alegra.com'])
 
   const mail = await getMessage((await listMessages())[0].ID)
-  assert.deepEqual(mail.To.map((t) => t.Address).sort(), ['cristian.albornoz@alegra.com', 'cristian.bautista@alegra.com', 'valentina.garcia@alegra.com'])
-  assert.ok(!JSON.stringify([mail.To, mail.Cc, mail.Bcc]).includes('tm-alegra'))
+  assert.deepEqual(mail.To.map((t) => t.Address), ['tm-alegra@alegra.com'])
+  assert.ok(!JSON.stringify([mail.To, mail.Cc, mail.Bcc]).includes('otro'))
 })
 
 test('«Correos a comunicar» vacío ya no impide enviar; cambiar la lista en el admin se aplica al instante', async () => {
@@ -86,7 +95,7 @@ test('«Correos a comunicar» vacío ya no impide enviar; cambiar la lista en el
 })
 
 test('el simulacro muestra los destinatarios reales de la notificación', async () => {
-  const r = await makeRecord({ correosAComunicar: ['tm-alegra@alegra.com'] })
+  const r = await makeRecord({ correosAComunicar: ['otro@alegra.com'] })
   const sim = await sendNovedad({ recordId: r.id, actor: viewer, channel: 'web', trigger: 'manual', simulate: true })
-  assert.deepEqual(sim.recipients?.sort(), ['cristian.albornoz@alegra.com', 'cristian.bautista@alegra.com', 'valentina.garcia@alegra.com'])
+  assert.deepEqual(sim.recipients, ['tm-alegra@alegra.com'])
 })

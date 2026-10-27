@@ -241,7 +241,7 @@ export const TOOLS = [
     description:
       'Fallback MANUAL (TMDIAPD-16): toda novedad/pre-novedad se comunica a PMKT automáticamente en cuanto tiene los campos obligatorios completos — normalmente NO hace falta llamar a este tool. ' +
       'Úsalo solo para reintentar un envío que falló o para depurar por qué un registro no se ha comunicado. ' +
-      'Envía el correo a los destinatarios configurados en el admin (y avisa al canal de Google Chat mencionándolos). Aplica a TODOS los tipos de novedad. ' +
+      'Envía el correo a los destinatarios configurados en el admin (y avisa al canal de Google Chat; menciona solo a quien esté marcado para ello). Solo se comunican las Novedades y las Pre-novedades; cualquier otro tipo devuelve un error y no se envía. ' +
       'Antes de enviar valida que título, breve descripción, fecha de lanzamiento, fecha real de producción, al menos un responsable y «¿Trae video?» estén completos (y el Video si «¿Trae video?» es Sí); si falta alguno, devuelve error.missingFields con la lista exacta, sin enviar nada, y la novedad queda pendiente hasta completarlo. ' +
       'Flujo en dos pasos: llamar SIN "confirm" devuelve un simulacro (asunto, destinatarios y texto exactos del correo) sin enviar nada; hay que mostrárselo al usuario y volver a llamar con "confirm: true" para el envío real. ' +
       'La respuesta siempre trae status (sent | simulated | failed | skipped) y, si falló, error.code y error.message con el motivo (ej. DUPLICATE, VALIDATION, SMTP_AUTH, RECIPIENT_REJECTED, RATE_LIMIT, SMTP_NOT_CONFIGURED). ' +

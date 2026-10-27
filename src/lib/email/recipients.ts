@@ -9,16 +9,27 @@ export interface NotifyRecipient {
   name?: string
   /** ID numérico del usuario de Google (el de la mención <users/ID> de Chat). */
   chatUserId?: string
+  /**
+   * false = no se menciona en la tarjeta de Chat (ni se consulta su ID). Es lo que corresponde a un grupo
+   * como tm-alegra, que recibe el correo pero no se etiqueta. Ausente = se menciona si tiene ID.
+   */
+  mention?: boolean
 }
 
 export const MAX_NOTIFY_RECIPIENTS = 20
 
-/** Los de la tarea TMDIAPD-56 mientras nadie los cambie en el admin. */
+/**
+ * Decisión final de PMKT: el correo va al grupo tm-alegra (lo reciben todos sus miembros) y no se menciona a nadie
+ * en Chat. Se puede cambiar en Admin → Correos (lista de destinatarios y casilla «Mencionar en Chat»).
+ */
 export const DEFAULT_NOTIFY_RECIPIENTS: NotifyRecipient[] = [
-  { email: 'cristian.albornoz@alegra.com', name: 'Cristian Albornoz Arias' },
-  { email: 'cristian.bautista@alegra.com', name: 'Cristian Bautista' },
-  { email: 'valentina.garcia@alegra.com', name: 'Valentina García' },
+  { email: 'tm-alegra@alegra.com', name: 'TM Alegra', mention: false },
 ]
+
+/** Quienes se mencionan en la tarjeta de Chat (los marcados con mention:false se excluyen). */
+export function mentionable(recipients: NotifyRecipient[]): NotifyRecipient[] {
+  return recipients.filter((r) => r.mention !== false)
+}
 
 export const CHAT_USER_ID_RE = /^\d{10,25}$/
 
@@ -46,6 +57,7 @@ export function normalizeRecipients(input: unknown): NotifyRecipient[] {
       const name = raw.name.replace(NAME_UNSAFE, '').replace(/\s+/g, ' ').trim().slice(0, 80)
       if (name) r.name = name
     }
+    if (raw.mention === false) r.mention = false
     if (raw.chatUserId !== undefined && raw.chatUserId !== null && raw.chatUserId !== '') {
       const id = String(raw.chatUserId).trim()
       if (!CHAT_USER_ID_RE.test(id)) throw new RecipientsError(`El ID de Chat de ${email} debe ser un número de 10 a 25 dígitos.`)

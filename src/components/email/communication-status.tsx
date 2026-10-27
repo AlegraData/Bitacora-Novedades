@@ -1,13 +1,15 @@
 'use client'
 
-import { evaluateCommunication, logicalFromFields, hasTraeVideoField, COMMUNICATION_SINCE } from '@/lib/email/communication'
+import { evaluateCommunication, logicalFromFields, hasTraeVideoField, isCommunicableTipo, TIPO_NO_COMUNICABLE, COMMUNICATION_SINCE } from '@/lib/email/communication'
 
 type FieldLite = { id: string; name: string }
 
 /** Qué falta para comunicar una novedad (null si no aplica mostrar nada: ya enviada o registro anterior al corte). */
 export function pendingFor(data: Record<string, unknown>, fields: FieldLite[], createdAt: string, done: boolean): string[] | null {
   if (done || new Date(createdAt) < COMMUNICATION_SINCE) return null
-  const check = evaluateCommunication(logicalFromFields(data, fields), { traeVideoConfigured: hasTraeVideoField(fields) })
+  const logical = logicalFromFields(data, fields)
+  if (!isCommunicableTipo(logical.tipo)) return null // este tipo no se comunica: no hay nada «pendiente»
+  const check = evaluateCommunication(logical, { traeVideoConfigured: hasTraeVideoField(fields) })
   return check.ready ? [] : check.missing
 }
 
@@ -33,6 +35,8 @@ export function CommunicationStatus({ data, fields, createdAt, done }: { data: R
   if (done) {
     tone = { bg: '#f0fdf4', border: '#86efac', color: '#166534' }
     text = <>✅ <b>Comunicada.</b> Si hace falta volver a enviarla, se pide el motivo y queda registrado.</>
+  } else if (!isCommunicableTipo(logicalFromFields(data, fields).tipo)) {
+    text = <>{TIPO_NO_COMUNICABLE}</>
   } else if (new Date(createdAt) < COMMUNICATION_SINCE) {
     text = <>Registro anterior al envío automático: no se comunica sola. Puedes enviarla manualmente.</>
   } else {

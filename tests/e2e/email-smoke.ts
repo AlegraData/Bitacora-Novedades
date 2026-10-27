@@ -84,7 +84,7 @@ async function main() {
     assert.equal(msgs.length, 1)
     const mail = await getMessage(msgs[0].ID)
     assert.equal(mail.Subject, 'Novedad | Alegra POS - Facturación masiva')
-    assert.deepEqual(mail.To.map((t) => t.Address).sort(), ['cristian.albornoz@alegra.com', 'cristian.bautista@alegra.com', 'valentina.garcia@alegra.com'])
+    assert.deepEqual(mail.To.map((t) => t.Address), ['tm-alegra@alegra.com'])
     assert.ok(!JSON.stringify(mail.To).includes('dest1@alegra.com'), 'solo los destinatarios de la notificación, no los del registro')
     assert.equal(mail.From.Name, 'Alegra Product News')
     assert.ok(mail.Text.includes(`https://bitacora.test/app?record=${recordId}`))

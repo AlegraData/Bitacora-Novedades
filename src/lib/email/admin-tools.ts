@@ -166,6 +166,7 @@ export async function shadowComparison(limit = 50): Promise<ShadowComparison> {
 import { resolveChatUsers, itHubConfigured, type ResolvedUser } from './it-hub'
 import { sendChatMentionTest } from './chat'
 import { ensureChatIds, toMentions } from './chat-ids'
+import { mentionable } from './recipients'
 
 /** Para el botón «Resolver IDs de Chat»: consulta el IT Hub y devuelve lo encontrado (la pantalla decide qué guardar). */
 export async function resolveIdsForAdmin(emails: unknown): Promise<ResolvedUser[]> {
@@ -192,7 +193,8 @@ export async function sendChatTest(actor: SettingsActor): Promise<ChatTestResult
     return { ok: false, target: 'ninguno', mentioned: [], unresolved: [], error: `Máximo ${rl.limit} mensajes de prueba por hora. Intenta en ${Math.ceil(rl.retryAfterSec / 60)} min.` }
   }
   const settings = await getSettings()
-  const { recipients, unresolved } = await ensureChatIds(settings.recipients)
+  const { recipients: resolved, unresolved } = await ensureChatIds(settings.recipients)
+  const recipients = mentionable(resolved) // los marcados «no mencionar» (p. ej. un grupo) no se etiquetan
   const result = await sendChatMentionTest(toMentions(recipients))
 
   await addAuditLog({

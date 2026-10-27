@@ -2,7 +2,7 @@ import { test, beforeEach } from 'node:test'
 import assert from 'node:assert/strict'
 import {
   evaluateCommunication, traeVideoAnswer, logicalFromFields, hasTraeVideoField, isMissing,
-  MISSING_TRAE_VIDEO, MISSING_VIDEO, COMMUNICATION_SINCE,
+  MISSING_TRAE_VIDEO, MISSING_VIDEO, COMMUNICATION_SINCE, isCommunicableTipo, TIPO_NO_COMUNICABLE,
 } from '@/lib/email/communication'
 import { sendNovedad } from '@/lib/email/service'
 import { prisma } from '@/lib/prisma'
@@ -72,7 +72,9 @@ test('logicalFromFields arma el objeto lógico por nombre de campo (para la pant
 
 // ---------- criterios de aceptación de TMDIAPD-56 sobre el servicio real ----------
 
-const TIPOS = ['Novedad', 'Pre-novedad', 'Mejora técnica', 'Experimento', 'Normativa', 'Novedades pequeñas', 'Resolución de Issues', 'Pre novedad']
+// Decisión final de PMKT: solo Novedad y Pre-novedad (con sus variantes de escritura) se comunican.
+const TIPOS = ['Novedad', 'Pre-novedad', 'Pre novedad']
+const TIPOS_NO_COMUNICABLES = ['Mejora técnica', 'Experimento', 'Normativa', 'Novedades pequeñas', 'Resolución de Issues', 'Mejora']
 
 beforeEach(async () => {
   await resetDb()
@@ -83,15 +85,39 @@ beforeEach(async () => {
 
 const send = (id: string, trigger: 'auto' | 'manual' = 'auto') => sendNovedad({ recordId: id, actor: viewer, channel: 'web', trigger })
 
-test('se envía un correo para CADA uno de los 8 tipos cuando sus campos obligatorios están completos', async () => {
+test('isCommunicableTipo: Novedad y Pre-novedad (sin importar tildes, mayúsculas ni guion); el resto no', () => {
+  for (const t of ['Novedad', 'novedad', ' NOVEDAD ', 'Pre-novedad', 'Pre novedad', 'pre-Novedad', ['Novedad']]) assert.equal(isCommunicableTipo(t), true, String(t))
+  for (const t of [...TIPOS_NO_COMUNICABLES, 'Novedades', 'Pre-novedades', '', '   ', undefined, null, 5, {}, []]) assert.equal(isCommunicableTipo(t), false, String(t))
+})
+
+test('se envía un correo para Novedad y Pre-novedad cuando sus campos obligatorios están completos', async () => {
   for (const tipo of TIPOS) {
     const r = await makeRecord({ tipo, titulo: `Novedad ${tipo}` })
     const res = await send(r.id)
     assert.equal(res.status, 'sent', tipo)
   }
   const subjects = await Promise.all((await listMessages()).map(async (m) => (await getMessage(m.ID)).Subject))
-  assert.equal(subjects.length, 8)
+  assert.equal(subjects.length, TIPOS.length)
   for (const tipo of TIPOS) assert.ok(subjects.some((s) => s.startsWith(`${tipo} |`)), `falta el correo del tipo ${tipo}`)
+})
+
+test('los demás tipos NO se envían: ni automático ni con el botón; no se toma lock ni sale correo', async () => {
+  for (const tipo of TIPOS_NO_COMUNICABLES) {
+    const r = await makeRecord({ tipo })
+    const auto = await send(r.id)
+    assert.deepEqual([auto.status, auto.skippedReason], ['skipped', 'tipo_no_comunicable'], tipo)
+    const manual = await send(r.id, 'manual')
+    assert.equal(manual.status, 'failed', tipo)
+    assert.equal(manual.error?.code, 'VALIDATION')
+    assert.equal(manual.error?.message, TIPO_NO_COMUNICABLE)
+    // tampoco con el reenvío ni en simulacro
+    assert.equal((await sendNovedad({ recordId: r.id, actor: viewer, channel: 'web', trigger: 'manual', simulate: true })).status, 'failed')
+    assert.equal(await prisma.emailDelivery.count({ where: { recordId: r.id } }), 0, 'no deja ni rastro de envío')
+  }
+  assert.equal((await listMessages()).length, 0)
+  // un registro sin tipo tampoco se comunica
+  const sinTipo = await makeRecord({ tipo: undefined })
+  assert.equal((await send(sinTipo.id)).skippedReason, 'tipo_no_comunicable')
 })
 
 test('un registro incompleto no se envía: queda pendiente y dice qué falta (para cada tipo)', async () => {
@@ -138,7 +164,7 @@ test('sin responder «¿Trae video?» el registro queda pendiente', async () => 
 })
 
 test('el envío automático no toca registros anteriores al despliegue (sin retroactividad), pero el manual sí puede', async () => {
-  const old = await makeRecord({ tipo: 'Experimento' }, new Date(COMMUNICATION_SINCE.getTime() - 86_400_000))
+  const old = await makeRecord({ tipo: 'Novedad' }, new Date(COMMUNICATION_SINCE.getTime() - 86_400_000))
   assert.equal((await send(old.id)).skippedReason, 'registro_anterior_al_cutover')
   assert.equal((await listMessages()).length, 0)
   assert.equal((await send(old.id, 'manual')).status, 'sent')

@@ -10,6 +10,7 @@ import { sendNovedad } from '@/lib/email/service'
 import { getSettings } from '@/lib/email/settings'
 import { resolveIdsForAdmin, sendChatTest, testLimiter } from '@/lib/email/admin-tools'
 import { DEFAULT_NOTIFY_RECIPIENTS } from '@/lib/email/recipients'
+import { Prisma } from '@/generated/prisma'
 import { resetDb, makeUser, ensureFields } from './helpers'
 import { clearMailbox } from './mailpit'
 import { viewer, makeRecord, setMode, startServer, makeWebhookButton, type TestServer } from './email-helpers'
@@ -42,6 +43,16 @@ async function startItHub(): Promise<ItHub> {
   return { url: `http://127.0.0.1:${(server.address() as AddressInfo).port}`, calls, mode, close: () => new Promise((r) => server.close(() => r())) }
 }
 
+// Las pruebas del mecanismo de menciones usan estos tres como destinatarios (la configuración por defecto de
+// producción ahora es el grupo tm-alegra, sin menciones: ver el último bloque de pruebas).
+const MENTIONED = [
+  { email: 'cristian.albornoz@alegra.com', name: 'Cristian Albornoz Arias' },
+  { email: 'cristian.bautista@alegra.com', name: 'Cristian Bautista' },
+  { email: 'valentina.garcia@alegra.com', name: 'Valentina García' },
+]
+const useRecipients = (list: unknown[]) =>
+  prisma.emailSettings.update({ where: { id: 'singleton' }, data: { notifyRecipients: list as unknown as Prisma.InputJsonValue } })
+
 const ENV = ['IT_HUB_URL', 'IT_HUB_API_KEY', 'PMKT_CHAT_WEBHOOK_URL', 'PMKT_CHAT_TEST_WEBHOOK_URL'] as const
 let saved: Record<string, string | undefined>
 let hub: ItHub
@@ -63,6 +74,7 @@ beforeEach(async () => {
   const u = await makeUser('admin@alegra.com', 'ADMIN')
   actor = { id: u.id, email: u.email, name: u.name }
   await setMode('live')
+  await useRecipients(MENTIONED)
 })
 afterEach(async () => {
   for (const k of ENV) {
@@ -181,7 +193,7 @@ test('si el IT Hub falla, el correo y la tarjeta salen igual: las personas apare
   const msg = bodyOf(c)
   assert.ok(!msg.text.includes('<users/'))
   assert.ok(msg.text.includes('Cristian Albornoz Arias') && msg.text.includes('Valentina García'))
-  assert.equal((await getSettings()).recipientsCustomized, false, 'no se guardó nada')
+  assert.ok((await getSettings()).recipients.every((x) => !x.chatUserId), 'no se guardó ningún ID')
 })
 
 test('un ID ya guardado a mano se respeta y solo se consulta lo que falta', async () => {
@@ -209,7 +221,7 @@ test('en modo Apps Script (webhook) la app NO publica en Chat (lo sigue haciendo
 test('resolver IDs desde el admin: solo correos válidos y distintos, sin guardar nada', async () => {
   const r = await resolveIdsForAdmin(['cristian.albornoz@alegra.com', 'CRISTIAN.ALBORNOZ@alegra.com', 'mal-escrito', 'a@alegra.com Bcc: x@y.com'])
   assert.deepEqual(r.map((x) => x.email), ['cristian.albornoz@alegra.com'])
-  assert.equal((await getSettings()).recipientsCustomized, false)
+  assert.ok((await getSettings()).recipients.every((x) => !x.chatUserId), 'no se guardó nada')
   assert.deepEqual(await resolveIdsForAdmin('no es una lista'), [])
 })
 
@@ -255,6 +267,39 @@ test('mensaje de prueba de Chat: sin webhook, con webhook caído y límite por h
   assert.match((await sendChatTest(actor)).error!, /Máximo 10 mensajes/)
 })
 
-test('los destinatarios por defecto coinciden con los IDs conocidos del directorio', () => {
-  assert.deepEqual(DEFAULT_NOTIFY_RECIPIENTS.map((r) => r.email), Object.keys(IDS))
+test('los tres de TMDIAPD-56 siguen coincidiendo con los IDs conocidos del directorio (para cuando se vuelvan a usar)', () => {
+  assert.deepEqual(MENTIONED.map((r) => r.email), Object.keys(IDS))
+})
+
+test('configuración por defecto (grupo tm-alegra, sin menciones): el correo va al grupo, la tarjeta no menciona a nadie y no se consulta el IT Hub', async () => {
+  await prisma.emailSettings.update({ where: { id: 'singleton' }, data: { notifyRecipients: Prisma.DbNull } })
+  const c = await chat()
+  process.env.PMKT_CHAT_WEBHOOK_URL = c.url
+  const res = await sendNovedad({ recordId: (await makeRecord()).id, actor: viewer, channel: 'web', trigger: 'manual' })
+  assert.equal(res.status, 'sent')
+  assert.deepEqual(res.recipients, ['tm-alegra@alegra.com'])
+  assert.equal(res.chat, 'sent')
+
+  const msg = bodyOf(c)
+  assert.equal(msg.text, undefined, 'sin línea de menciones')
+  assert.ok(!JSON.stringify(msg).includes('<users/'))
+  assert.match(msg.cardsV2[0].card.sections[0].widgets[0].textParagraph.text, /Facturación masiva/, 'la tarjeta sale igual')
+  assert.equal(hub.calls.length, 0, 'no se busca el ID de un grupo')
+  assert.deepEqual(DEFAULT_NOTIFY_RECIPIENTS.map((r) => r.mention), [false])
+})
+
+test('«Mencionar en Chat» apagado: ni se busca su ID ni se nombra; los demás sí se mencionan', async () => {
+  await useRecipients([{ email: 'tm-alegra@alegra.com', mention: false }, MENTIONED[0]])
+  const c = await chat()
+  process.env.PMKT_CHAT_WEBHOOK_URL = c.url
+  const res = await sendNovedad({ recordId: (await makeRecord()).id, actor: viewer, channel: 'web', trigger: 'manual' })
+  assert.deepEqual(res.recipients, ['tm-alegra@alegra.com', 'cristian.albornoz@alegra.com'], 'ambos reciben el correo')
+  const msg = bodyOf(c)
+  assert.ok(msg.text.endsWith('<users/105277208503173878668>'), 'solo se menciona al marcado')
+  assert.equal(msg.text.match(/<users\//g).length, 1)
+  assert.ok(!/tm-alegra|TM Alegra/.test(msg.text), 'el grupo no se nombra')
+  assert.deepEqual(hub.calls.map((x) => x.email), ['cristian.albornoz@alegra.com'])
+
+  const test = await sendChatTest(actor)
+  assert.deepEqual(test.mentioned, ['Cristian Albornoz Arias'])
 })

@@ -114,7 +114,7 @@ export function SettingsPanel({ state, onChange }: { state: AdminState; onChange
     setResolving(true)
     setChatMsg(null)
     try {
-      const res = await resolveEmailRecipientIds(rows.filter((r) => !r.chatUserId).map((r) => r.email))
+      const res = await resolveEmailRecipientIds(rows.filter((r) => r.mention !== false && !r.chatUserId).map((r) => r.email))
       const found = res.filter((r) => r.id)
       setRows(rows.map((r) => {
         const hit = found.find((x) => x.email === r.email)
@@ -191,16 +191,20 @@ export function SettingsPanel({ state, onChange }: { state: AdminState; onChange
       <div style={card}>
         <h3 style={{ fontSize: 15, fontWeight: 700, color: '#1a202c', marginBottom: 4 }}>Destinatarios de la notificación</h3>
         <p style={{ fontSize: 12, color: '#64748b', marginBottom: 10 }}>
-          El correo de cada novedad se envía <b>solo</b> a estas personas (ya no a «Correos a comunicar» del registro). Si agregas su ID de Chat, la tarjeta del canal las menciona.
+          El correo de cada novedad se envía <b>solo</b> a estas personas (ya no a «Correos a comunicar» del registro). Si una persona tiene ID de Chat y «Mencionar en Chat» está marcado, la tarjeta del canal la menciona; un grupo (como tm-alegra) recibe el correo sin que se mencione. Solo se comunican las Novedades y las Pre-novedades.
           {!settings.recipientsCustomized && ' Ahora se usa la lista por defecto; al guardar queda como tuya.'}
           {' '}En los modos Apps Script y Sombra el script sigue enviando a «Correos a comunicar»: esta lista aplica en En vivo.
         </p>
         <div style={{ display: 'grid', gap: 6, marginBottom: 8 }}>
           {rows.map((r, i) => (
-            <div key={r.email} style={{ display: 'grid', gridTemplateColumns: 'minmax(180px, 1.4fr) minmax(140px, 1fr) minmax(170px, 1fr) auto', gap: 6, alignItems: 'center' }}>
+            <div key={r.email} style={{ display: 'grid', gridTemplateColumns: 'minmax(180px, 1.4fr) minmax(140px, 1fr) minmax(170px, 1fr) auto auto', gap: 6, alignItems: 'center' }}>
               <span style={{ fontSize: 13, color: '#1e293b', wordBreak: 'break-all' }}>{r.email}</span>
               <input value={r.name ?? ''} placeholder="Nombre" maxLength={80} onChange={(e) => setRows(rows.map((x, j) => (j === i ? { ...x, name: e.target.value } : x)))} style={inputStyle} />
               <input value={r.chatUserId ?? ''} placeholder="ID de Chat (opcional)" inputMode="numeric" onChange={(e) => setRows(rows.map((x, j) => (j === i ? { ...x, chatUserId: e.target.value.replace(/[^0-9]/g, '') || undefined } : x)))} style={{ ...inputStyle, fontFamily: 'monospace' }} />
+              <label title="Si está apagado, no se menciona en la tarjeta de Chat ni se busca su ID (ideal para un grupo)" style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 12, color: '#475569', whiteSpace: 'nowrap' }}>
+                <input type="checkbox" checked={r.mention !== false} onChange={(e) => setRows(rows.map((x, j) => (j === i ? { ...x, mention: e.target.checked ? undefined : false } : x)))} />
+                Mencionar en Chat
+              </label>
               <button onClick={() => setRows(rows.filter((_, j) => j !== i))} disabled={rows.length <= 1} title={rows.length <= 1 ? 'Debe quedar al menos uno' : 'Quitar'} style={{ ...btn, padding: '5px 10px', opacity: rows.length <= 1 ? 0.4 : 1 }}>✕</button>
             </div>
           ))}
@@ -221,7 +225,7 @@ export function SettingsPanel({ state, onChange }: { state: AdminState; onChange
         </div>
 
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center', margin: '-6px 0 18px' }}>
-          <button onClick={resolveIds} disabled={resolving || !state.itHub.configured || rows.every((r) => r.chatUserId)} title={state.itHub.configured ? undefined : 'Falta IT_HUB_URL / IT_HUB_API_KEY'} style={{ ...btn, opacity: resolving || !state.itHub.configured || rows.every((r) => r.chatUserId) ? 0.5 : 1 }}>
+          <button onClick={resolveIds} disabled={resolving || !state.itHub.configured || rows.every((r) => r.mention === false || r.chatUserId)} title={state.itHub.configured ? undefined : 'Falta IT_HUB_URL / IT_HUB_API_KEY'} style={{ ...btn, opacity: resolving || !state.itHub.configured || rows.every((r) => r.mention === false || r.chatUserId) ? 0.5 : 1 }}>
             {resolving ? 'Consultando…' : 'Resolver IDs de Chat'}
           </button>
           <button onClick={chatTest} disabled={chatTesting || dirty || !state.chat.configured} title={dirty ? 'Guarda los cambios antes de probar' : undefined} style={{ ...btn, opacity: chatTesting || dirty || !state.chat.configured ? 0.5 : 1 }}>

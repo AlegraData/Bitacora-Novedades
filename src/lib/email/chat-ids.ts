@@ -4,7 +4,7 @@ import { addAuditLog } from '@/lib/actions/audit'
 import { getSettings } from './settings'
 import { resolveChatUsers, type ResolvedUser } from './it-hub'
 import type { ChatMention } from './chat'
-import type { NotifyRecipient } from './recipients'
+import { mentionable, type NotifyRecipient } from './recipients'
 
 /** Guarda en la configuración los IDs resueltos (así no se vuelve a consultar el IT Hub en cada envío). */
 async function persist(found: { email: string; id: string; fullName?: string }[]) {
@@ -29,7 +29,7 @@ async function persist(found: { email: string; id: string; fullName?: string }[]
  * Nunca lanza: si el IT Hub falla, esa persona se nombra en texto (sin notificar) y el envío sigue.
  */
 export async function ensureChatIds(recipients: NotifyRecipient[]): Promise<{ recipients: NotifyRecipient[]; unresolved: ResolvedUser[] }> {
-  const missing = recipients.filter((r) => !r.chatUserId)
+  const missing = mentionable(recipients).filter((r) => !r.chatUserId)
   if (missing.length === 0) return { recipients, unresolved: [] }
 
   let results: ResolvedUser[]
@@ -54,5 +54,5 @@ export async function ensureChatIds(recipients: NotifyRecipient[]): Promise<{ re
 }
 
 export function toMentions(recipients: NotifyRecipient[]): ChatMention[] {
-  return recipients.map((r) => ({ name: r.name ?? r.email, chatUserId: r.chatUserId }))
+  return mentionable(recipients).map((r) => ({ name: r.name ?? r.email, chatUserId: r.chatUserId }))
 }

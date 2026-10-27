@@ -7,10 +7,11 @@ import { CommunicationStatus, PendingChip, pendingFor } from '@/components/email
 import { COMMUNICATION_SINCE, MISSING_VIDEO } from '@/lib/email/communication'
 
 const fields = [
+  { id: 'ti', name: 'Tipo' },
   { id: 't', name: 'Título' }, { id: 'd', name: 'Breve descripción' }, { id: 'fl', name: 'Fecha de lanzamiento' },
   { id: 'fp', name: 'Fecha real de producción' }, { id: 'r', name: 'Responsables' }, { id: 'tv', name: '¿Trae video?' }, { id: 'v', name: 'Video' },
 ]
-const complete = { t: 'T', d: 'D', fl: '2026-11-01', fp: '2026-11-02', r: ['a@alegra.com'], tv: 'No' }
+const complete = { ti: 'Novedad', t: 'T', d: 'D', fl: '2026-11-01', fp: '2026-11-02', r: ['a@alegra.com'], tv: 'No' }
 const after = new Date(COMMUNICATION_SINCE.getTime() + 3_600_000).toISOString()
 const before = new Date(COMMUNICATION_SINCE.getTime() - 3_600_000).toISOString()
 const html = (el: Parameters<typeof render>[0]) => render(el).replace(/<!-- -->/g, '')
@@ -21,6 +22,16 @@ test('pendingFor: lista lo que falta solo para novedades posteriores al corte y 
   assert.deepEqual(pendingFor({ ...complete, tv: 'Sí' }, fields, after, false), [MISSING_VIDEO])
   assert.equal(pendingFor({ ...complete, d: '' }, fields, after, true), null, 'ya comunicada: sin etiqueta')
   assert.equal(pendingFor({ ...complete, d: '' }, fields, before, false), null, 'registro anterior: no se llena la tabla de pendientes')
+})
+
+test('tipos que no se comunican (Mejora, Experimento…): sin etiqueta «Pendiente» y el detalle lo explica', () => {
+  for (const tipo of ['Mejora técnica', 'Experimento', 'Normativa', 'Novedades pequeñas']) {
+    assert.equal(pendingFor({ ...complete, ti: tipo, d: '' }, fields, after, false), null, tipo)
+    const h = html(<CommunicationStatus data={{ ...complete, ti: tipo, d: '' }} fields={fields} createdAt={after} done={false} />)
+    assert.ok(h.includes('solo se envían las Novedades y las Pre-novedades'), tipo)
+    assert.ok(!h.includes('Pendiente de comunicar'))
+  }
+  assert.deepEqual(pendingFor({ ...complete, ti: 'Pre-novedad', d: '' }, fields, after, false), ['Breve descripción'])
 })
 
 test('pendingFor: si «¿Trae video?» aún no existe como campo, la regla no bloquea', () => {
@@ -43,7 +54,7 @@ test('estado en el detalle: pendiente con lo que falta, lista, comunicada o regi
 
   assert.ok(html(<CommunicationStatus data={complete} fields={fields} createdAt={after} done={false} />).includes('Lista para comunicar'))
   assert.ok(html(<CommunicationStatus data={complete} fields={fields} createdAt={after} done />).includes('Comunicada'))
-  assert.ok(html(<CommunicationStatus data={{}} fields={fields} createdAt={before} done={false} />).includes('Registro anterior'))
+  assert.ok(html(<CommunicationStatus data={{ ti: 'Novedad' }} fields={fields} createdAt={before} done={false} />).includes('Registro anterior'))
 })
 
 test('el estado reacciona a lo que se escribe: al poner el video deja de estar pendiente', () => {
