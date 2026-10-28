@@ -1,12 +1,13 @@
 /**
  * Genera los embeddings de las novedades que no tienen (p. ej. las creadas mientras la llave de Gemini
- * era inválida). Necesario para que la búsqueda semántica las encuentre.
+ * era inválida). Necesario para que la búsqueda semántica las encuentre. Con --all rehace todos: hay que
+ * usarlo una vez al cambiar de modelo, porque los vectores de modelos distintos no son comparables.
  *
  *   npx tsx scripts/backfill-embeddings.ts            (simulacro: solo cuenta)
  *   npx tsx scripts/backfill-embeddings.ts --apply    (genera y guarda)
  *   npx tsx scripts/backfill-embeddings.ts --apply --all   (rehace también los existentes)
  *
- * Usa DATABASE_URL y GEMINI_API_KEY de .env.local. Es idempotente. Para producción usa la conexión
+ * Usa DATABASE_URL y LITELLM_API_KEY (Gateway de IA) de .env.local. Es idempotente. Para producción usa la conexión
  * directa (puerto 5432), no el pooler 6543.
  */
 import dotenv from 'dotenv'
@@ -32,7 +33,7 @@ async function main() {
       )
   console.log(`Novedades a procesar: ${rows.length}`)
   if (!apply || rows.length === 0) return
-  if (!process.env.GEMINI_API_KEY) throw new Error('GEMINI_API_KEY no está en .env.local')
+  if (!process.env.LITELLM_API_KEY) throw new Error('LITELLM_API_KEY no está en .env.local')
 
   for (const [i, r] of rows.entries()) {
     await updateRecordEmbedding(r.id, r.data as Record<string, unknown>)

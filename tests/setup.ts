@@ -9,6 +9,7 @@ if (host !== 'localhost' && host !== '127.0.0.1') {
 
 process.env.DATABASE_URL = url
 delete process.env.GEMINI_API_KEY
+delete process.env.LITELLM_API_KEY
 delete process.env.PMKT_CHAT_WEBHOOK_URL
 
 // SMTP: siempre el servidor de captura local (Mailpit); nunca credenciales reales.

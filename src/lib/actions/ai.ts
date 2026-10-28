@@ -1,12 +1,26 @@
-import { GoogleGenerativeAI } from '@google/generative-ai'
 import { prisma } from '@/lib/prisma'
 import { getFields } from './fields'
 
-const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY!)
-// El nombre exacto según el diagnóstico es 'gemini-embedding-001'
-const embeddingModel = genAI.getGenerativeModel({ model: 'gemini-embedding-001' })
+// Embeddings por el Gateway de IA de Alegra (LiteLLM, formato OpenAI). La columna RecordEmbedding.embedding es vector(768).
+const GATEWAY_URL = (process.env.LITELLM_BASE_URL ?? 'https://alegra-litellm.alegra.com/v1').replace(/\/+$/, '')
+const EMBEDDING_MODEL = process.env.LITELLM_EMBEDDING_MODEL ?? 'openai/text-embedding-3-small'
+const EMBEDDING_DIMENSIONS = 768
+const MAX_EMBEDDING_CHARS = 20000
 
-/** La búsqueda semántica no pudo ejecutarse (sin llave, Gemini caído o llave inválida, BD). No es «sin resultados». */
+async function embedText(text: string): Promise<number[]> {
+  const res = await fetch(`${GATEWAY_URL}/embeddings`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${process.env.LITELLM_API_KEY}` },
+    body: JSON.stringify({ model: EMBEDDING_MODEL, input: text.slice(0, MAX_EMBEDDING_CHARS), dimensions: EMBEDDING_DIMENSIONS }),
+    signal: AbortSignal.timeout(20000),
+  })
+  if (!res.ok) throw new Error(`Gateway de IA respondió ${res.status}: ${(await res.text()).slice(0, 300)}`)
+  const vector = (await res.json())?.data?.[0]?.embedding
+  if (!Array.isArray(vector) || vector.length !== EMBEDDING_DIMENSIONS) throw new Error('El Gateway de IA devolvió un embedding con formato inesperado')
+  return vector
+}
+
+/** La búsqueda semántica no pudo ejecutarse (sin llave, Gateway caído o llave inválida, BD). No es «sin resultados». */
 export class SemanticSearchUnavailableError extends Error {}
 
 /**
@@ -26,15 +40,11 @@ async function recordToText(recordData: Record<string, unknown>): Promise<string
  * Genera y guarda el embedding de un registro.
  */
 export async function updateRecordEmbedding(recordId: string, recordData: Record<string, unknown>) {
-  if (!process.env.GEMINI_API_KEY) return
+  if (!process.env.LITELLM_API_KEY) return
 
   try {
     const content = await recordToText(recordData)
-    const result = await embeddingModel.embedContent({
-      content: { role: 'user', parts: [{ text: content }] },
-      outputDimensionality: 768,
-    } as Parameters<typeof embeddingModel.embedContent>[0])
-    const vector = result.embedding.values
+    const vector = await embedText(content)
 
     const vectorString = `[${vector.join(',')}]`
     
@@ -55,14 +65,10 @@ export async function updateRecordEmbedding(recordId: string, recordData: Record
  */
 export async function searchSimilarRecords(query: string, limit = 5) {
   if (!query) return []
-  if (!process.env.GEMINI_API_KEY) throw new SemanticSearchUnavailableError('GEMINI_API_KEY no configurada')
+  if (!process.env.LITELLM_API_KEY) throw new SemanticSearchUnavailableError('LITELLM_API_KEY no configurada')
 
   try {
-    const result = await embeddingModel.embedContent({
-      content: { role: 'user', parts: [{ text: query }] },
-      outputDimensionality: 768,
-    } as Parameters<typeof embeddingModel.embedContent>[0])
-    const vector = result.embedding.values
+    const vector = await embedText(query)
     const vectorString = `[${vector.join(',')}]`
 
     const similarRecords: any[] = await prisma.$queryRawUnsafe(`
