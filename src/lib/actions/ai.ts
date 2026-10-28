@@ -6,6 +6,9 @@ const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY!)
 // El nombre exacto según el diagnóstico es 'gemini-embedding-001'
 const embeddingModel = genAI.getGenerativeModel({ model: 'gemini-embedding-001' })
 
+/** La búsqueda semántica no pudo ejecutarse (sin llave, Gemini caído o llave inválida, BD). No es «sin resultados». */
+export class SemanticSearchUnavailableError extends Error {}
+
 /**
  * Convierte un registro a una cadena de texto legible para embedding.
  */
@@ -51,7 +54,8 @@ export async function updateRecordEmbedding(recordId: string, recordData: Record
  * Busca los registros más similares a una consulta.
  */
 export async function searchSimilarRecords(query: string, limit = 5) {
-  if (!process.env.GEMINI_API_KEY || !query) return []
+  if (!query) return []
+  if (!process.env.GEMINI_API_KEY) throw new SemanticSearchUnavailableError('GEMINI_API_KEY no configurada')
 
   try {
     const result = await embeddingModel.embedContent({
@@ -72,6 +76,6 @@ export async function searchSimilarRecords(query: string, limit = 5) {
     return similarRecords
   } catch (error) {
     console.error('Error en búsqueda semántica:', error)
-    return []
+    throw new SemanticSearchUnavailableError(error instanceof Error ? error.message : String(error))
   }
 }

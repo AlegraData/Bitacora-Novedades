@@ -3,6 +3,7 @@ import { prisma } from '@/lib/prisma'
 import type { Caller } from '@/lib/mcp/auth'
 import type { Role } from '@/types'
 import { verifyApiKey, type Scope } from './keys'
+import { SEMANTIC_UNAVAILABLE } from './semantic'
 import { keyLimiter, failedAuthLimiter, FAILED_AUTH_MAX } from './rate-limit'
 
 export interface ApiContext {
@@ -39,6 +40,7 @@ export function toolResultResponse(result: Record<string, unknown>, successStatu
   let code = 'invalid_request'
   if (/no encontrado/i.test(msg)) [status, code] = [404, 'not_found']
   else if (/no puedes|requiere rol|solo su autor|solo un admin/i.test(msg)) [status, code] = [403, 'forbidden']
+  else if (msg === SEMANTIC_UNAVAILABLE) [status, code] = [503, 'semantic_search_unavailable']
 
   const error: Record<string, unknown> = { code, message: msg }
   if (result.details !== undefined) error.details = result.details

@@ -131,9 +131,16 @@ test('GET /records/search: valida q y responde con results', async () => {
   assert.equal((await call(search, '/api/v1/records/search')).status, 400)
   assert.equal((await call(search, '/api/v1/records/search?q=%20%20')).status, 400)
   assert.equal((await call(search, `/api/v1/records/search?q=${'a'.repeat(501)}`)).status, 400)
-  const ok = await call(search, '/api/v1/records/search?q=facturacion&limit=5')
-  assert.equal(ok.status, 200)
-  assert.ok(Array.isArray((await ok.json()).results))
+})
+
+test('GET /records/search: si la búsqueda semántica no puede ejecutarse responde 503, no una lista vacía', async () => {
+  // En los tests no hay GEMINI_API_KEY (tests/setup.ts)
+  const res = await call(search, '/api/v1/records/search?q=facturacion&limit=5')
+  assert.equal(res.status, 503)
+  const body = await res.json()
+  assert.equal(body.error.code, 'semantic_search_unavailable')
+  assert.equal(body.results, undefined)
+  assert.equal(await prisma.auditLog.count({ where: { action: 'API_SEARCHED_RECORDS' } }), 0)
 })
 
 test('NUL en query (filtros de texto, recordId) → 400, nunca 500', async () => {
@@ -158,10 +165,9 @@ test('GET /audit-log exige el scope audit:read', async () => {
 test('las lecturas por API quedan en la auditoría con el canal y la key', async () => {
   await call(list, '/api/v1/records?tipo=Mejora')
   await callOne(ids.a)
-  await call(search, '/api/v1/records/search?q=hola')
 
   const logs = await prisma.auditLog.findMany({ orderBy: { timestamp: 'asc' } })
-  assert.deepEqual(logs.map((l) => l.action), ['API_LISTED_RECORDS', 'API_VIEWED_RECORD', 'API_SEARCHED_RECORDS'])
+  assert.deepEqual(logs.map((l) => l.action), ['API_LISTED_RECORDS', 'API_VIEWED_RECORD'])
   assert.equal(logs[1].recordId, ids.a)
   const d = logs[0].details as Record<string, unknown>
   assert.equal(d.via, 'api')
@@ -169,5 +175,5 @@ test('las lecturas por API quedan en la auditoría con el canal y la key', async
   assert.deepEqual(d.args, { tipo: 'Mejora' })
 
   // y además en el log de requests del token
-  assert.equal(await prisma.apiRequestLog.count({ where: { apiKeyId: keyId } }), 3)
+  assert.equal(await prisma.apiRequestLog.count({ where: { apiKeyId: keyId } }), 2)
 })

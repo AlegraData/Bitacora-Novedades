@@ -1,7 +1,8 @@
 import { prisma } from '@/lib/prisma'
 import type { Prisma } from '@/generated/prisma'
 import { addAuditLog } from '@/lib/actions/audit'
-import { updateRecordEmbedding, searchSimilarRecords } from '@/lib/actions/ai'
+import { updateRecordEmbedding, searchSimilarRecords, SemanticSearchUnavailableError } from '@/lib/actions/ai'
+import { SEMANTIC_UNAVAILABLE } from '@/lib/api/semantic'
 import { sendNovedad, type SendActor, type SendResult } from '@/lib/email/service'
 import { toClientResult } from '@/lib/email/public'
 import { listDeliveries } from '@/lib/email/history'
@@ -343,7 +344,13 @@ export async function handleSearchRecordsSemantic(args: Record<string, unknown>)
     data: Record<string, unknown>
     distance: number
   }
-  const raw = (await searchSimilarRecords(query, limit)) as SemanticRow[]
+  let raw: SemanticRow[]
+  try {
+    raw = (await searchSimilarRecords(query, limit)) as SemanticRow[]
+  } catch (e) {
+    if (e instanceof SemanticSearchUnavailableError) return { error: SEMANTIC_UNAVAILABLE }
+    throw e
+  }
 
   let results = raw.map((r) => ({
     ...recordBase(r),

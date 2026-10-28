@@ -63,7 +63,7 @@ export const ENDPOINTS: Endpoint[] = [
     example: `curl -G -H "Authorization: Bearer $TOKEN" \\\n  --data-urlencode "proyectoLinear=REVPYME-711" \\\n  --data-urlencode "fields=titulo,fechaProduccion,status" \\\n  ${API_BASE_URL}/records`,
   },
   {
-    method: 'GET', path: '/records/search', scope: 'records:read', summary: 'Búsqueda semántica en lenguaje natural (embeddings).', mcpTool: 'search_records_semantic',
+    method: 'GET', path: '/records/search', scope: 'records:read', summary: 'Búsqueda semántica en lenguaje natural (embeddings). Si el servicio de embeddings no está disponible responde 503 (semantic_search_unavailable); una lista vacía significa que no hubo coincidencias.', mcpTool: 'search_records_semantic',
     params: [
       { name: 'q', in: 'query', type: 'string', required: true, description: 'Consulta en lenguaje natural (máx. 500 caracteres).' },
       { name: 'limit', in: 'query', type: 'integer', description: 'Default 10, máximo 50.' },
