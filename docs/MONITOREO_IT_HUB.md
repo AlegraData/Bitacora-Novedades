@@ -47,6 +47,12 @@ HTTP de `/auth/login` (200), contrato `/api/monitor/status` (apagada hasta despl
 MCP `POST /api/mcp` sin token (debe dar 401 con `WWW-Authenticate: Bearer`), Cloud Run (revisión lista) y métricas de
 Cloud Run (5xx, p95, CPU, memoria). Alta en `alegra-it-hub-backend/supabase/migrations/20261105220000_monitor_bitacora.sql`.
 
+## Corregido junto con el monitoreo: `WWW-Authenticate` no llegaba a los clientes
+Los 401 de producción (`/api/mcp` y `/api/v1/*`) salían **sin** `WWW-Authenticate`: el `realm` era `"Bitácora …"` (con
+"á") y el Google Frontend de Cloud Run descarta los encabezados con caracteres no ASCII. En local el servidor sí lo
+emitía. Los `realm` ahora son ASCII (`Bitacora Novedades MCP/API`) y `tests/www-authenticate-ascii.test.ts` lo vigila.
+La sonda `mcp-auth` del monitor exige ese encabezado, así que no quedará en verde hasta desplegar este cambio.
+
 ## Pendientes y hallazgos (5-nov-2026)
 1. **Bucle de clientes MCP (≈40 % de respuestas 4xx en 24 h).** Hermes-Agent 0.21.x reintenta cada pocos segundos
    `POST /oauth/token` → 400 y `/.well-known/oauth-protected-resource` → 404. Bitácora tiene el mismo diseño que

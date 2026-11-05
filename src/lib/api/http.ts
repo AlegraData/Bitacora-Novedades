@@ -60,7 +60,9 @@ function bearerToken(request: NextRequest): string | null {
   return m ? m[1] : null
 }
 
-const WWW_AUTH = 'Bearer realm="Bitácora Novedades API"'
+// ASCII a propósito: el Google Frontend de Cloud Run descarta el encabezado si trae caracteres no ASCII (la "á" de
+// "Bitácora" hacía que los clientes OAuth nunca recibieran WWW-Authenticate).
+const WWW_AUTH = 'Bearer realm="Bitacora Novedades API"'
 
 type Handler = (ctx: ApiContext) => Promise<Response>
 type RouteCtx = { params: Promise<Record<string, string>> }
