@@ -62,8 +62,9 @@ export const config = {
      * - _next/image (image optimization files)
      * - favicon.ico (favicon file)
      * - api/v1 (API REST con token Bearer: no usa sesión de Supabase)
+     * - api/monitor/ (contrato de salud con token OIDC del monitor: no depende de Supabase Auth)
      * Feel free to modify this pattern to include more paths.
      */
-    '/((?!_next/static|_next/image|api/v1/|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)',
+    '/((?!_next/static|_next/image|api/v1/|api/monitor/|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)',
   ],
 }

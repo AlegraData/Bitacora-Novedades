@@ -85,7 +85,8 @@ export async function POST(request: NextRequest) {
       { jsonrpc: '2.0', id, error: { code: -32001, message: 'Unauthorized' } },
       {
         status: 401,
-        headers: { ...oauthCorsHeaders(), 'WWW-Authenticate': 'Bearer realm="Bitácora Novedades MCP"' },
+        // Realm en ASCII: con "á" el Google Frontend de Cloud Run descarta el encabezado (ver lib/api/http.ts).
+        headers: { ...oauthCorsHeaders(), 'WWW-Authenticate': 'Bearer realm="Bitacora Novedades MCP"' },
       }
     )
   }
