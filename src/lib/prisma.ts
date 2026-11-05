@@ -13,7 +13,9 @@ function createPrismaClient() {
   // "timezone" de sesión distinto de UTC (visto en producción: timestamps
   // guardados ~5h adelantados). Se fuerza UTC explícitamente en cada
   // conexión nueva del pool para no depender del estado que traiga el pooler.
-  const pool = new Pool({ connectionString })
+  // DATABASE_POOL_MAX solo se usa en pruebas locales (p. ej. una base en memoria de una sola conexión); sin definir, el valor por defecto de pg.
+  const max = Number(process.env.DATABASE_POOL_MAX) || undefined
+  const pool = new Pool({ connectionString, max })
   pool.on('connect', (client) => {
     client.query("SET TIME ZONE 'UTC'").catch((err) => {
       console.error('No se pudo forzar timezone UTC en la conexión de Postgres:', err)

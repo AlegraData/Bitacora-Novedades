@@ -54,11 +54,19 @@ emitía. Los `realm` ahora son ASCII (`Bitacora Novedades MCP/API`) y `tests/www
 La sonda `mcp-auth` del monitor exige ese encabezado, así que no quedará en verde hasta desplegar este cambio.
 
 ## Pendientes y hallazgos (5-nov-2026)
-1. **Bucle de clientes MCP (≈40 % de respuestas 4xx en 24 h).** Hermes-Agent 0.21.x reintenta cada pocos segundos
-   `POST /oauth/token` → 400 y `/.well-known/oauth-protected-resource` → 404. Bitácora tiene el mismo diseño que
-   tenía Meet Wiki antes de su arreglo: renovación **no atómica** del refresh token (`src/app/oauth/token/route.ts`),
-   sin metadatos RFC 9728 y sin freno. La solución ya probada está en Meet Wiki (PR #20: rotación atómica, gracia de
-   30 s, 429 con `Retry-After`, metadatos y registro del motivo); se puede portar casi tal cual.
+1. **Bucle de clientes MCP (≈40 % de respuestas 4xx en 24 h) — corregido (nov-2026).** Hermes-Agent 0.21.x reintentaba cada pocos
+   segundos `POST /oauth/token` → 400 y `/.well-known/oauth-protected-resource` → 404. Se portó el diseño de Meet Wiki (PR #20):
+   - `src/lib/oauth/refresh.ts`: rotación atómica (`updateMany` condicionado + `create` en una transacción), gracia de 30 s (un refresh
+     token recién rotado devuelve los tokens de su sucesor, localizado por `createdAt == revokedAt`; una revocación manual o una nueva
+     autorización nunca se resucitan), motivo de cada rechazo en el log (`oauth_refresh_rejected`, JSON sin tokens) y freno de 10 fallos
+     por IP+cliente en 60 s → **429 con `Retry-After`** (en memoria y por instancia: reduce carga, no es control de acceso).
+   - `/.well-known/oauth-protected-resource` (+ `/api/mcp`, RFC 9728) y `resource_metadata` en el `WWW-Authenticate` del 401.
+   - `/oauth/token`: `Cache-Control: no-store`, tope de 8 KB al cuerpo y CORS que expone `WWW-Authenticate`.
+   - Diferencia con Meet Wiki: aquí `client_id` es opcional al renovar (si se envía debe coincidir con el de la sesión), para no romper a
+     clientes que no lo mandaban.
+   - Pruebas: `tests/oauth-refresh-security.test.ts` (28 casos, sin base de datos) y `scripts/smoke-oauth.sh <url>` (humo anónimo para dev y producción).
+   - Lo que el servidor NO puede arreglar: un cliente con refresh token vencido (7 días) o revocado hace más de 30 s solo se recupera si su dueño
+     reconecta el conector. Para medir: `gcloud logging read 'resource.type="cloud_run_revision" AND resource.labels.service_name="bitacora-app" AND jsonPayload.event="oauth_refresh_rejected"' --project automations-novedades-app --freshness=24h`.
 2. **Secreto en el repositorio:** `INFRASTRUCTURE_BLUEPRINT.md` (rastreado por git) trae en el encabezado de la sección 1
    una cadena con aspecto de contraseña. Si es real, **rotarla** y retirarla del archivo (y del historial si se desea).
 3. El `proxy.ts` llama a `supabase.auth.getUser()` en cada petición no excluida (incluido `/api/mcp`); un Supabase
