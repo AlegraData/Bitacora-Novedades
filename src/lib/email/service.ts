@@ -13,10 +13,12 @@ import { getSmtpConfig, sendMail, smtpStatus, MAX_RECIPIENTS } from './transport
 import { sendChatCard } from './chat'
 import { ensureChatIds, toMentions } from './chat-ids'
 import type { NotifyRecipient } from './recipients'
-import { evaluateCommunication, COMMUNICATION_SINCE, BASE_REQUIRED_FIELDS, isCommunicableTipo, TIPO_NO_COMUNICABLE, normalizeResendReason, MIN_RESEND_REASON, MAX_RESEND_REASON } from './communication'
+import { evaluateCommunication, COMMUNICATION_SINCE, BASE_REQUIRED_FIELDS, findRule, shouldAutoSend, TIPO_NO_COMUNICABLE, normalizeResendReason, MIN_RESEND_REASON, MAX_RESEND_REASON } from './communication'
+import { loadRules } from './rules'
 
-// Se comunican solo las Novedades y Pre-novedades (ver COMMUNICABLE_TIPOS). El envío automático solo aplica a
-// registros creados desde el despliegue (ver COMMUNICATION_SINCE): no se dispara nada retroactivo.
+// Qué tipos se comunican, cómo (automático o manual) y con qué criterio lo define la regla de cada tipo
+// (TMDIAPD-65, ver rules.ts). El envío automático solo aplica a registros creados desde el despliegue
+// (COMMUNICATION_SINCE) y desde que la regla pasó a AUTO: no se dispara nada retroactivo.
 export const AUTO_NOTIFY_SINCE = COMMUNICATION_SINCE
 
 /** Campos obligatorios para comunicar (más «¿Trae video?» y, si es Sí, «Video»: ver evaluateCommunication). */
@@ -145,10 +147,13 @@ export async function sendNovedad(opts: SendOptions): Promise<SendResult> {
 
   if (auto && raw.createdAt < AUTO_NOTIFY_SINCE) return skipped('registro_anterior_al_cutover')
 
-  // Solo se comunican las Novedades y Pre-novedades; los demás tipos no salen (ni solos ni con el botón).
-  if (!isCommunicableTipo(logical.tipo)) {
+  // La regla del tipo manda: DISABLED no sale nunca; MANUAL solo sale con una acción explícita (nunca en auto).
+  const rule = findRule(await loadRules(), logical.tipo)
+  if (!rule || rule.mode === 'DISABLED') {
     return auto ? skipped('tipo_no_comunicable') : failure('VALIDATION', TIPO_NO_COMUNICABLE)
   }
+  if (auto && rule.mode === 'MANUAL') return skipped('tipo_solo_manual')
+  if (auto && !shouldAutoSend(rule, raw.createdAt)) return skipped('registro_anterior_al_cutover')
 
   if (opts.resend) {
     // Cualquier usuario puede reenviar, pero deja el motivo escrito (queda en el historial y la auditoría).
@@ -158,7 +163,7 @@ export async function sendNovedad(opts: SendOptions): Promise<SendResult> {
   }
 
   // Validación: obligatorios + «¿Trae video?» (y Video si es Sí).
-  const missingFields = evaluateCommunication(logical, { traeVideoConfigured: map.has('traeVideo') }).missing
+  const missingFields = evaluateCommunication(logical, { traeVideoConfigured: map.has('traeVideo'), requiredFields: rule.requiredFields }).missing
   // Destinatarios: SOLO los configurados en el admin (TMDIAPD-56). «Correos a comunicar» es informativo.
   const settings = await getSettings()
   const notify = settings.recipients
