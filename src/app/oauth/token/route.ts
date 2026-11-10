@@ -1,10 +1,20 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { randomBytes, createHash, timingSafeEqual } from 'crypto'
+import { createHash, timingSafeEqual } from 'crypto'
 import { prisma } from '@/lib/prisma'
 import { oauthCorsHeaders } from '@/lib/oauth/cors'
+import {
+  ACCESS_TTL_MS,
+  REFRESH_TTL_MS,
+  generateToken,
+  refreshSession,
+  logRejection,
+  limiterKey,
+  retryAfterSeconds,
+  recordFailure,
+  recordSuccess,
+} from '@/lib/oauth/refresh'
 
-const ACCESS_TTL_MS = 15 * 60 * 1000
-const REFRESH_TTL_MS = 7 * 24 * 60 * 60 * 1000
+const MAX_BODY_CHARS = 8 * 1024
 
 export async function OPTIONS() {
   return new NextResponse(null, { status: 204, headers: oauthCorsHeaders() })
@@ -18,8 +28,8 @@ function verifyPkce(codeVerifier: string, codeChallenge: string): boolean {
 }
 
 async function issueSession(clientId: string, clientName: string | undefined, userEmail: string) {
-  const accessToken = randomBytes(32).toString('base64url')
-  const refreshToken = randomBytes(32).toString('base64url')
+  const accessToken = generateToken()
+  const refreshToken = generateToken()
   const now = Date.now()
 
   await prisma.oAuthSession.create({
@@ -43,17 +53,29 @@ async function issueSession(clientId: string, clientName: string | undefined, us
 }
 
 export async function POST(request: NextRequest) {
-  const headers = oauthCorsHeaders()
-  const contentType = request.headers.get('content-type') ?? ''
+  // RFC 6749 §5.1: las respuestas del endpoint de tokens no deben guardarse en ninguna caché.
+  const headers = { ...oauthCorsHeaders(), 'Cache-Control': 'no-store', Pragma: 'no-cache' }
+  const invalidRequest = () => NextResponse.json({ error: 'invalid_request' }, { status: 400, headers })
 
+  const raw = await request.text()
+  if (raw.length > MAX_BODY_CHARS) return invalidRequest()
+
+  const contentType = request.headers.get('content-type') ?? ''
   let params: URLSearchParams
   if (contentType.includes('application/json')) {
-    const body = await request.json().catch(() => ({}))
+    let body: unknown = {}
+    try {
+      body = JSON.parse(raw)
+    } catch {
+      return invalidRequest()
+    }
     params = new URLSearchParams(
-      Object.entries(body).map(([k, v]) => [k, String(v)])
+      body && typeof body === 'object' && !Array.isArray(body)
+        ? Object.entries(body).map(([k, v]) => [k, String(v)])
+        : []
     )
   } else {
-    params = new URLSearchParams(await request.text())
+    params = new URLSearchParams(raw)
   }
 
   const grantType = params.get('grant_type')
@@ -86,16 +108,48 @@ export async function POST(request: NextRequest) {
   }
 
   if (grantType === 'refresh_token') {
-    const refreshToken = params.get('refresh_token') ?? ''
-    const session = await prisma.oAuthSession.findUnique({ where: { refreshToken } })
+    const refreshToken = params.get('refresh_token')
+    const clientId = params.get('client_id')
+    if (!refreshToken) return invalidRequest()
 
-    if (!session || session.revokedAt || session.refreshExpiresAt < new Date()) {
-      return NextResponse.json({ error: 'invalid_grant' }, { status: 400, headers })
+    const ip = request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || null
+    const userAgent = request.headers.get('user-agent')
+    const key = limiterKey(ip, clientId)
+
+    // Un cliente que insiste con credenciales inválidas recibe 429 con Retry-After en vez de golpear la base cada pocos segundos.
+    const wait = retryAfterSeconds(key)
+    if (wait > 0) {
+      logRejection('revoked', clientId, userAgent, true)
+      return NextResponse.json(
+        { error: 'invalid_grant', error_description: 'Too many failed attempts — wait and re-authenticate' },
+        { status: 429, headers: { ...headers, 'Retry-After': String(wait) } }
+      )
     }
 
-    await prisma.oAuthSession.update({ where: { id: session.id }, data: { revokedAt: new Date() } })
-    const tokens = await issueSession(session.clientId, session.clientName ?? undefined, session.userEmail)
-    return NextResponse.json(tokens, { headers })
+    const result = await refreshSession(refreshToken, clientId)
+    if (!result.ok) {
+      recordFailure(key)
+      logRejection(result.reason, clientId, userAgent)
+      // La respuesta no revela el motivo (token inexistente, revocado, de otro cliente): solo el vencimiento, que el
+      // usuario debe poder entender para volver a autorizar.
+      return NextResponse.json(
+        result.reason === 'expired'
+          ? { error: 'invalid_grant', error_description: 'Refresh token expired — please re-authenticate' }
+          : { error: 'invalid_grant' },
+        { status: 400, headers }
+      )
+    }
+
+    recordSuccess(key)
+    return NextResponse.json(
+      {
+        access_token: result.accessToken,
+        refresh_token: result.refreshToken,
+        token_type: 'Bearer',
+        expires_in: Math.floor(ACCESS_TTL_MS / 1000),
+      },
+      { headers }
+    )
   }
 
   return NextResponse.json({ error: 'unsupported_grant_type' }, { status: 400, headers })

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { oauthCorsHeaders } from '@/lib/oauth/cors'
+import { publicOrigin, wwwAuthenticate } from '@/lib/oauth/metadata'
 import { resolveCaller, type Caller } from '@/lib/mcp/auth'
 import { addAuditLog } from '@/lib/actions/audit'
 import {
@@ -85,8 +86,9 @@ export async function POST(request: NextRequest) {
       { jsonrpc: '2.0', id, error: { code: -32001, message: 'Unauthorized' } },
       {
         status: 401,
-        // Realm en ASCII: con "á" el Google Frontend de Cloud Run descarta el encabezado (ver lib/api/http.ts).
-        headers: { ...oauthCorsHeaders(), 'WWW-Authenticate': 'Bearer realm="Bitacora Novedades MCP"' },
+        // Solo ASCII (el Google Frontend de Cloud Run descarta el encabezado si no; ver lib/api/http.ts) y con
+        // resource_metadata para que el cliente descubra el servidor de autorización (RFC 9728).
+        headers: { ...oauthCorsHeaders(), 'WWW-Authenticate': wwwAuthenticate(publicOrigin(request.headers, request.url)) },
       }
     )
   }
