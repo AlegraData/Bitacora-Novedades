@@ -15,7 +15,7 @@ export const COMMUNICATION_SINCE = new Date('2026-10-23T00:38:00.000Z')
  */
 export const COMMUNICABLE_TIPOS = ['Novedad', 'Pre-novedad']
 
-export const TIPO_NO_COMUNICABLE = 'Este tipo de novedad no se comunica a PMKT: solo se envían las Novedades y las Pre-novedades.'
+export const TIPO_NO_COMUNICABLE = 'Este tipo de novedad no está habilitado para comunicarse. Un administrador puede habilitarlo desde Admin → Comunicación.'
 
 export const MISSING_TRAE_VIDEO = '¿Trae video? (elige Sí o No)'
 export const MISSING_VIDEO = 'Video (marcaste «¿Trae video?» = Sí)'
@@ -28,6 +28,48 @@ export const BASE_REQUIRED_FIELDS: { key: string; label: string }[] = [
   { key: 'fechaProduccion', label: 'Fecha real de producción' },
   { key: 'responsables', label: 'Responsables' },
 ]
+
+// ---------- Reglas por tipo (TMDIAPD-65) ----------
+
+/** AUTO: sale sola al completarse | MANUAL: solo con una acción explícita | DISABLED: no se puede enviar. */
+export type CommunicationMode = 'AUTO' | 'MANUAL' | 'DISABLED'
+export const COMMUNICATION_MODES: CommunicationMode[] = ['AUTO', 'MANUAL', 'DISABLED']
+
+export const MODE_LABELS: Record<CommunicationMode, string> = {
+  AUTO: 'Automático',
+  MANUAL: 'Manual habilitado',
+  DISABLED: 'Deshabilitado',
+}
+
+export interface CommunicationRule {
+  tipo: string
+  mode: CommunicationMode
+  /** Claves lógicas (titulo, breveDescripcion…) que deben estar completas para comunicar. */
+  requiredFields: string[]
+  /** Solo en AUTO: no se envía sola ninguna novedad creada antes de esta fecha (ISO). null = sin límite propio. */
+  autoSince: string | null
+}
+
+/** Criterio de hoy: los obligatorios base más «¿Trae video?» (y «Video» si es Sí). */
+export const DEFAULT_REQUIRED_FIELDS: string[] = [...BASE_REQUIRED_FIELDS.map((f) => f.key), 'traeVideo']
+
+/** Reglas de fábrica (las que regían antes del panel): Novedad y Pre-novedad en automático, el resto deshabilitado. */
+export const DEFAULT_RULES: CommunicationRule[] = COMMUNICABLE_TIPOS.map((tipo) => ({
+  tipo,
+  mode: 'AUTO' as const,
+  requiredFields: DEFAULT_REQUIRED_FIELDS,
+  autoSince: null,
+}))
+
+/** Campos de la Bitácora que un administrador puede exigir (todos los lógicos salvo los que no tienen sentido). */
+const NOT_REQUIRABLE = new Set(['tipo', 'urlBitacora', 'status'])
+export const REQUIRABLE_FIELDS: { key: string; label: string }[] = Object.entries(LOGICAL_FIELD_NAMES)
+  .filter(([key]) => !NOT_REQUIRABLE.has(key))
+  .map(([key, label]) => ({ key, label }))
+
+export function isRequirableField(key: unknown): key is string {
+  return typeof key === 'string' && REQUIRABLE_FIELDS.some((f) => f.key === key)
+}
 
 export function isMissing(v: unknown): boolean {
   if (Array.isArray(v)) return v.every(isMissing)
@@ -43,11 +85,29 @@ function norm(v: unknown): string {
     .toLowerCase()
 }
 
-/** ¿El tipo se comunica? Compara sin tildes, mayúsculas ni guiones («Pre novedad» y «Pre-novedad» son el mismo). */
-export function isCommunicableTipo(tipo: unknown): boolean {
-  const key = (v: unknown) => norm(v).replace(/[-_\s]+/g, ' ')
-  const t = key(Array.isArray(tipo) ? tipo[0] : tipo)
-  return t !== '' && COMMUNICABLE_TIPOS.some((c) => key(c) === t)
+/** Normaliza un tipo para compararlo: sin tildes, mayúsculas ni guiones («Pre novedad» y «Pre-novedad» son el mismo). */
+export function tipoKey(tipo: unknown): string {
+  return norm(Array.isArray(tipo) ? tipo[0] : tipo).replace(/[-_\s]+/g, ' ')
+}
+
+/** La regla que aplica a un tipo. Un tipo sin regla se trata como deshabilitado (lo seguro). */
+export function findRule(rules: CommunicationRule[], tipo: unknown): CommunicationRule | null {
+  const k = tipoKey(tipo)
+  return k === '' ? null : (rules.find((r) => tipoKey(r.tipo) === k) ?? null)
+}
+
+/** ¿El tipo se puede comunicar (automática o manualmente)? */
+export function isCommunicableTipo(tipo: unknown, rules: CommunicationRule[] = DEFAULT_RULES): boolean {
+  const rule = findRule(rules, tipo)
+  return !!rule && rule.mode !== 'DISABLED'
+}
+
+/** ¿Esta novedad debe salir sola? Solo en modo AUTO y sin retroactivos (corte global y corte propio de la regla). */
+export function shouldAutoSend(rule: CommunicationRule | null, createdAt: Date | string): boolean {
+  if (!rule || rule.mode !== 'AUTO') return false
+  const created = new Date(createdAt).getTime()
+  const since = Math.max(COMMUNICATION_SINCE.getTime(), rule.autoSince ? new Date(rule.autoSince).getTime() : 0)
+  return created >= since
 }
 
 /** «Sí» / «No» del campo «¿Trae video?» (acepta mayúsculas, tildes y booleanos). null = sin elegir. */
@@ -68,16 +128,22 @@ export interface CommunicationCheck {
 
 /**
  * `logical` usa las claves lógicas del MCP (titulo, breveDescripcion, traeVideo…).
+ * `requiredFields`: el criterio de la regla del tipo (por defecto, el de fábrica).
  * `traeVideoConfigured`: si el campo «¿Trae video?» aún no existe en la Bitácora la regla se omite, para
  * que desplegar antes de crearlo no deje todas las novedades pendientes.
+ * «traeVideo» es un criterio compuesto: exige elegir Sí/No y, si es Sí, también el Video.
  */
-export function evaluateCommunication(logical: Record<string, unknown>, opts: { traeVideoConfigured: boolean }): CommunicationCheck {
-  const missing = BASE_REQUIRED_FIELDS.filter(({ key }) => isMissing(logical[key])).map(({ label }) => label)
+export function evaluateCommunication(logical: Record<string, unknown>, opts: { traeVideoConfigured: boolean; requiredFields?: string[] }): CommunicationCheck {
+  const required = opts.requiredFields ?? DEFAULT_REQUIRED_FIELDS
+  const missing = required
+    .filter((key) => key !== 'traeVideo' && isMissing(logical[key]))
+    .map((key) => LOGICAL_FIELD_NAMES[key] ?? key)
 
-  if (opts.traeVideoConfigured) {
+  if (opts.traeVideoConfigured && required.includes('traeVideo')) {
     const answer = traeVideoAnswer(logical.traeVideo)
     if (answer === null) missing.push(MISSING_TRAE_VIDEO)
-    else if (answer === 'yes' && isMissing(logical.video)) missing.push(MISSING_VIDEO)
+    // Si «Video» ya es obligatorio por sí solo no se repite el aviso.
+    else if (answer === 'yes' && !required.includes('video') && isMissing(logical.video)) missing.push(MISSING_VIDEO)
   }
   return { ready: missing.length === 0, missing }
 }

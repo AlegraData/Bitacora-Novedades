@@ -28,7 +28,7 @@ test('tipos que no se comunican (Mejora, Experimento…): sin etiqueta «Pendien
   for (const tipo of ['Mejora técnica', 'Experimento', 'Normativa', 'Novedades pequeñas']) {
     assert.equal(pendingFor({ ...complete, ti: tipo, d: '' }, fields, after, false), null, tipo)
     const h = html(<CommunicationStatus data={{ ...complete, ti: tipo, d: '' }} fields={fields} createdAt={after} done={false} />)
-    assert.ok(h.includes('solo se envían las Novedades y las Pre-novedades'), tipo)
+    assert.ok(h.includes('no está habilitado para comunicarse'), tipo)
     assert.ok(!h.includes('Pendiente de comunicar'))
   }
   assert.deepEqual(pendingFor({ ...complete, ti: 'Pre-novedad', d: '' }, fields, after, false), ['Breve descripción'])

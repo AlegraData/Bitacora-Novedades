@@ -197,6 +197,21 @@ model EmailSettings {
   updatedByEmail   String?
 }
 
+// Regla de comunicación por tipo de novedad (TMDIAPD-65). Una fila por tipo; los tipos sin fila usan
+// los valores de fábrica (src/lib/email/communication.ts → DEFAULT_RULES) o, si no existen ahí, quedan deshabilitados.
+model CommunicationRule {
+  id             String    @id @default(cuid())
+  tipo           String    @unique
+  // AUTO | MANUAL | DISABLED
+  mode           String    @default("DISABLED")
+  // Claves lógicas obligatorias para comunicar este tipo.
+  requiredFields String[]
+  // Solo AUTO: no se envían solas las novedades creadas antes de esta fecha (se fija al pasar a AUTO).
+  autoSince      DateTime?
+  updatedAt      DateTime  @updatedAt
+  updatedByEmail String?
+}
+
 // Plantilla activa del correo (Handlebars). Cada guardado deja una revisión.
 model EmailTemplate {
   id             String   @id @default(cuid())

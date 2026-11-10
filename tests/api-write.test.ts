@@ -157,7 +157,7 @@ test('notify-pmkt: novedad incompleta → 422 con lo que falta; confirm no boole
   // un tipo que no se comunica (solo Novedad y Pre-novedad) se rechaza con 422 y su motivo
   const noTipo = await send(notify, t, 'POST', `/api/v1/records/${mejora.id}/notify-pmkt`, {})
   assert.equal(noTipo.status, 422)
-  assert.match((await noTipo.json()).error.message, /solo se envían las Novedades y las Pre-novedades/)
+  assert.match((await noTipo.json()).error.message, /no está habilitado para comunicarse/)
 
   const nov = await (await send(create, t, 'POST', '/api/v1/records', { ...base, tipo: 'Novedad' })).json()
   const res = await send(notify, t, 'POST', `/api/v1/records/${nov.id}/notify-pmkt`, {})
