@@ -1,6 +1,6 @@
 'use client'
 
-import { useMemo, useState, type CSSProperties, type ReactNode } from 'react'
+import { useEffect, useMemo, useState, type CSSProperties, type ReactNode } from 'react'
 import { Search, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight } from 'lucide-react'
 import { PAGE_SIZES, DEFAULT_PAGE_SIZE, matchesQuery, paginate, pageWindow, type PageSize } from '@/lib/admin/table'
 
@@ -266,4 +266,14 @@ export function DataTable<T>({ columns, rows, getKey, searchText, searchPlacehol
       <Pagination page={p.page} pageCount={p.pageCount} total={p.total} from={p.from} to={p.to} pageSize={p.pageSize} onPage={setPage} onPageSize={(s) => { setPageSize(s); setPage(1) }} />
     </div>
   )
+}
+
+/** Espera a que la persona termine de escribir antes de consultar al servidor. */
+export function useDebounced<T>(value: T, ms = 350): T {
+  const [v, setV] = useState(value)
+  useEffect(() => {
+    const t = setTimeout(() => setV(value), ms)
+    return () => clearTimeout(t)
+  }, [value, ms])
+  return v
 }

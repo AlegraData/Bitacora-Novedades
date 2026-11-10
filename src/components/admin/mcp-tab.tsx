@@ -1,16 +1,17 @@
 'use client'
 
-import { Fragment, useCallback, useEffect, useMemo, useState, useTransition } from 'react'
-import { Activity, ChevronDown, ChevronRight, Plug, ShieldAlert, Users } from 'lucide-react'
+import { useCallback, useEffect, useState, useTransition } from 'react'
+import { Activity, Plug, ShieldAlert, Users } from 'lucide-react'
 import type { McpOverviewDTO, McpActivityPage, PersonDTO, ConnectionDTO } from '@/lib/admin/mcp-dashboard'
-import { DEFAULT_PAGE_SIZE, matchesQuery, paginate, type PageSize } from '@/lib/admin/table'
+import { DEFAULT_PAGE_SIZE, type PageSize } from '@/lib/admin/table'
 import { toolLabel, RESULT_LABELS, timeAgo } from '@/lib/admin/labels'
 import { getMcpOverviewAction, getMcpActivityPage } from '@/lib/actions/admin-data'
 import { revokeMcpSession } from '@/lib/actions/mcp-sessions'
 import {
   Badge, BarList, DayBars, FilterSelect, PersonCell, Pagination, SearchBox, SectionHeader, SimpleTable, StatCard, StatGrid,
-  card, colors, th, td, type Column, type Tone,
+  card, colors, useDebounced, type Column, type Tone,
 } from './ui'
+import { PeopleTable } from './people-table'
 
 const AGENT_COLORS: Record<string, string> = { Claude: '#e07a5f', 'Claude Code': '#c1442e', opencode: '#3b82f6', 'Otro agente': '#64748b' }
 const STATUS_TONE: Record<string, Tone> = { ok: 'green', denied: 'amber', error: 'red' }
@@ -18,15 +19,6 @@ const CONN_STATUS: Record<ConnectionDTO['status'], { label: string; tone: Tone }
   active: { label: 'Vigente', tone: 'green' }, expiring: { label: 'Expira pronto', tone: 'amber' }, expired: { label: 'Expirada', tone: 'gray' }, revoked: { label: 'Revocada', tone: 'red' },
 }
 const PERIOD_OPTIONS = [{ value: '7', label: 'Últimos 7 días' }, { value: '30', label: 'Últimos 30 días' }, { value: '90', label: 'Últimos 90 días' }]
-
-function useDebounced<T>(value: T, ms = 350): T {
-  const [v, setV] = useState(value)
-  useEffect(() => {
-    const t = setTimeout(() => setV(value), ms)
-    return () => clearTimeout(t)
-  }, [value, ms])
-  return v
-}
 
 export function McpTab() {
   const [period, setPeriod] = useState('7')
@@ -90,21 +82,10 @@ export function McpTab() {
 }
 
 function PeopleSection({ overview, onChanged }: { overview: McpOverviewDTO; onChanged: () => void }) {
-  const [q, setQ] = useState('')
-  const [inactive, setInactive] = useState(false)
-  const [page, setPage] = useState(1)
-  const [pageSize, setPageSize] = useState<PageSize>(DEFAULT_PAGE_SIZE)
-  const [open, setOpen] = useState<string | null>(null)
   const [pending, start] = useTransition()
 
-  const rows = useMemo(
-    () => overview.rows.filter((p) => (inactive || p.activeConnections > 0) && matchesQuery([p.name, p.email], q)),
-    [overview.rows, inactive, q]
-  )
-  const p = paginate(rows, page, pageSize)
-
-  function revoke(id: string, who: string) {
-    if (!window.confirm(`¿Revocar esta conexión de ${who}? Pierde el acceso de inmediato.`)) return
+  function revoke(id: string) {
+    if (!window.confirm('¿Revocar esta conexión? La persona pierde el acceso de inmediato.')) return
     start(async () => { await revokeMcpSession(id); onChanged() })
   }
 
@@ -117,62 +98,35 @@ function PeopleSection({ overview, onChanged }: { overview: McpOverviewDTO; onCh
     {
       key: 'revoke', header: '', align: 'right',
       render: (c) => (c.status === 'active' || c.status === 'expiring') ? (
-        <button onClick={(e) => { e.stopPropagation(); revoke(c.id, 'esta persona') }} disabled={pending} style={{ padding: '5px 12px', borderRadius: 6, border: '1px solid #fc8181', background: '#fff', color: '#c53030', fontSize: 12, fontWeight: 600, cursor: pending ? 'default' : 'pointer' }}>Revocar</button>
+        <button onClick={() => revoke(c.id)} disabled={pending} style={{ padding: '5px 12px', borderRadius: 6, border: '1px solid #fc8181', background: '#fff', color: '#c53030', fontSize: 12, fontWeight: 600, cursor: pending ? 'default' : 'pointer' }}>Revocar</button>
       ) : null,
     },
+  ]
+
+  const columns: Column<PersonDTO>[] = [
+    {
+      key: 'agents', header: 'Agentes',
+      render: (p) => (
+        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+          {p.agents.length === 0 ? <span style={{ color: colors.faint }}>—</span> : p.agents.map((a) => <Badge key={a.agent}>{a.agent}{a.count > 1 ? ` ×${a.count}` : ''}</Badge>)}
+        </div>
+      ),
+    },
+    { key: 'conns', header: 'Conexiones', render: (p) => `${p.activeConnections} ${p.activeConnections === 1 ? 'vigente' : 'vigentes'}` },
+    { key: 'last', header: 'Último uso', nowrap: true, render: (p) => <span style={{ color: colors.muted }}>{timeAgo(p.lastUsedAt)}</span> },
+    { key: 'calls', header: 'Llamadas', align: 'right', render: (p) => p.calls },
   ]
 
   return (
     <div style={{ marginBottom: 22 }}>
       <SectionHeader title="Personas conectadas" description="Una fila por persona (por correo), aunque tenga varias conexiones. Despliega una fila para ver y gestionar cada una." />
-      <div style={{ ...card, overflow: 'hidden' }}>
-        <div style={{ display: 'flex', gap: 14, alignItems: 'center', flexWrap: 'wrap', padding: '14px 16px', borderBottom: `1px solid ${colors.lineSoft}` }}>
-          <SearchBox value={q} onChange={(v) => { setQ(v); setPage(1) }} placeholder="Buscar por nombre o correo…" />
-          <label style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 12.5, color: colors.muted, cursor: 'pointer' }}>
-            <input type="checkbox" checked={inactive} onChange={(e) => { setInactive(e.target.checked); setPage(1) }} style={{ accentColor: colors.teal }} />
-            Incluir personas sin conexión vigente
-          </label>
-        </div>
-        <div style={{ overflowX: 'auto' }}>
-          <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-            <thead>
-              <tr>
-                <th style={{ ...th, width: 28 }} />
-                {['Persona', 'Agentes', 'Conexiones', 'Último uso', 'Llamadas'].map((h, i) => <th key={h} style={{ ...th, textAlign: i === 4 ? 'right' : 'left' }}>{h}</th>)}
-              </tr>
-            </thead>
-            <tbody>
-              {p.rows.map((person: PersonDTO) => (
-                <Fragment key={person.email}>
-                  <tr onClick={() => setOpen(open === person.email ? null : person.email)} style={{ borderBottom: `1px solid ${colors.lineSoft}`, cursor: 'pointer' }}>
-                    <td style={td}>{open === person.email ? <ChevronDown size={15} color={colors.faint} /> : <ChevronRight size={15} color={colors.faint} />}</td>
-                    <td style={td}><PersonCell name={person.name} email={person.email} image={person.image} /></td>
-                    <td style={td}>
-                      <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-                        {person.agents.length === 0 ? <span style={{ color: colors.faint }}>—</span> : person.agents.map((a) => <Badge key={a.agent}>{a.agent}{a.count > 1 ? ` ×${a.count}` : ''}</Badge>)}
-                      </div>
-                    </td>
-                    <td style={td}>{person.activeConnections} {person.activeConnections === 1 ? 'vigente' : 'vigentes'}</td>
-                    <td style={{ ...td, color: colors.muted, whiteSpace: 'nowrap' }}>{timeAgo(person.lastUsedAt)}</td>
-                    <td style={{ ...td, textAlign: 'right' }}>{person.calls}</td>
-                  </tr>
-                  {open === person.email && (
-                    <tr>
-                      <td colSpan={6} style={{ padding: 0, background: colors.bg }}>
-                        <div style={{ padding: '4px 16px 14px 44px' }}>
-                          <SimpleTable columns={subColumns} rows={person.connections} getKey={(c) => c.id} />
-                        </div>
-                      </td>
-                    </tr>
-                  )}
-                </Fragment>
-              ))}
-              {p.rows.length === 0 && <tr><td colSpan={6} style={{ padding: 40, textAlign: 'center', color: colors.faint, fontSize: 13 }}>{q ? 'Nada coincide con la búsqueda.' : 'No hay personas con conexión vigente.'}</td></tr>}
-            </tbody>
-          </table>
-        </div>
-        <Pagination page={p.page} pageCount={p.pageCount} total={p.total} from={p.from} to={p.to} pageSize={p.pageSize} onPage={setPage} onPageSize={(s) => { setPageSize(s); setPage(1) }} />
-      </div>
+      <PeopleTable
+        rows={overview.rows}
+        columns={columns}
+        toggle={{ label: 'Incluir personas sin conexión vigente', keep: (p) => p.activeConnections > 0 }}
+        renderDetail={(p) => <SimpleTable columns={subColumns} rows={p.connections} getKey={(c) => c.id} />}
+        empty="No hay personas con conexión vigente."
+      />
     </div>
   )
 }

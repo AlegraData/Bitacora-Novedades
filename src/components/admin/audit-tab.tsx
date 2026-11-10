@@ -5,7 +5,7 @@ import { ChevronDown, ChevronRight } from 'lucide-react'
 import type { AuditPageDTO } from '@/lib/admin/audit'
 import { DEFAULT_PAGE_SIZE, type PageSize } from '@/lib/admin/table'
 import { getAuditPage } from '@/lib/actions/admin-data'
-import { Badge, FilterSelect, Pagination, SearchBox, SectionHeader, SimpleTable, card, colors, type Column, type Tone } from './ui'
+import { Badge, FilterSelect, Pagination, SearchBox, SectionHeader, SimpleTable, card, colors, useDebounced, type Column, type Tone } from './ui'
 
 type Row = AuditPageDTO['rows'][number]
 
@@ -18,16 +18,6 @@ function actionTone(a: string): Tone {
 }
 
 const VIA_LABEL: Record<string, string> = { web: 'App web', mcp: 'MCP', api: 'API' }
-
-/** Espera a que termine de escribir antes de consultar. */
-function useDebounced<T>(value: T, ms = 350): T {
-  const [v, setV] = useState(value)
-  useEffect(() => {
-    const t = setTimeout(() => setV(value), ms)
-    return () => clearTimeout(t)
-  }, [value, ms])
-  return v
-}
 
 export function AuditTab() {
   const [q, setQ] = useState('')
