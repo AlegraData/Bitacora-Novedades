@@ -13,6 +13,9 @@ import { sendTestEmail, simulateRecord, shadowComparison, resolveIdsForAdmin, se
 import type { ResolvedUser } from '@/lib/email/it-hub'
 import { listDeliveries, getDelivery } from '@/lib/email/history'
 import type { SendResult } from '@/lib/email/service'
+import { getRulesState, saveRule, type RuleRowDTO } from '@/lib/email/rules'
+import { listPending, resendFromPanel, type PendingRow } from '@/lib/email/panel'
+import { run } from '@/lib/email/admin'
 
 // Todas estas acciones son solo para ADMIN. El actor sale siempre de la sesión del servidor.
 async function admin() {
@@ -102,4 +105,29 @@ export async function resolveEmailRecipientIds(emails: string[]): Promise<Resolv
 
 export async function sendEmailChatTest(): Promise<ChatTestResult> {
   return sendChatTest(await admin())
+}
+
+// ---------------- reglas de comunicación por tipo, pendientes y reejecución (TMDIAPD-65) ----------
+
+export async function getCommunicationRules(): Promise<RuleRowDTO[]> {
+  await requireAdmin()
+  return getRulesState()
+}
+
+export async function saveCommunicationRule(input: { tipo: string; mode: string; requiredFields: string[] }): Promise<AdminResult<RuleRowDTO[]>> {
+  const actor = await admin()
+  const res = await run(() => saveRule(actor, input))
+  if (res.ok) revalidatePath('/app')
+  return res
+}
+
+export async function listPendingNovedades(filters: { tipo?: string } = {}): Promise<PendingRow[]> {
+  await requireAdmin()
+  return listPending({ tipo: filters.tipo })
+}
+
+export async function resendNovedadFromPanel(recordId: string, reason: string): Promise<SendResult> {
+  const result = await resendFromPanel(await admin(), recordId, reason)
+  if (result.status === 'sent') revalidatePath('/app')
+  return result
 }
