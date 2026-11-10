@@ -2,7 +2,6 @@ import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import { getCurrentUserProfile, getAllUsers, updateUserRole } from '@/lib/actions/users'
 import { getFields, saveFieldPermission } from '@/lib/actions/fields'
-import { getActiveMcpSessions, revokeMcpSession } from '@/lib/actions/mcp-sessions'
 import { getAllApiKeys } from '@/lib/actions/api-keys'
 import { Navbar } from '@/components/navbar'
 import { AdminPanel } from '@/components/admin-panel'
@@ -20,10 +19,9 @@ export default async function AdminPage() {
   const userProfile = await getCurrentUserProfile()
   if (!userProfile || userProfile.role !== 'ADMIN') redirect('/app')
 
-  const [fields, users, mcpSessions, apiKeys] = await Promise.all([
+  const [fields, users, apiKeys] = await Promise.all([
     getFields(),
     getAllUsers(),
-    getActiveMcpSessions(),
     getAllApiKeys(),
   ])
 
@@ -39,12 +37,10 @@ export default async function AdminPage() {
         <AdminPanel
           fields={fields}
           users={users.map(u => ({ ...u, role: u.role as 'ADMIN' | 'MANAGER' | 'VIEWER', name: u.name ?? u.email, image: u.image ?? null, createdAt: u.createdAt.toISOString(), updatedAt: u.updatedAt.toISOString() }))}
-          mcpSessions={mcpSessions}
           apiKeys={apiKeys}
           currentUserEmail={userProfile.email}
           onUpdateUserRole={updateUserRole}
           onSaveFieldPermission={saveFieldPermission}
-          onRevokeMcpSession={revokeMcpSession}
         />
       </div>
     </div>

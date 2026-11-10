@@ -76,3 +76,21 @@ test('tarjetas y gráficos: valores visibles y estados vacíos', () => {
   assert.ok(html(<DayBars days={[{ label: '4/11', value: 3 }, { label: '5/11', value: 0 }]} />).includes('Llamadas por día'))
   assert.ok(html(<DayBars days={[{ label: '4/11', value: 0 }]} />).includes('Sin llamadas'))
 })
+
+import { timeAgo, toolLabel, RESULT_LABELS } from '@/lib/admin/labels'
+
+test('timeAgo: relativo en español', () => {
+  const now = Date.parse('2026-11-10T12:00:00.000Z')
+  const ago = (ms: number) => new Date(now - ms).toISOString()
+  assert.equal(timeAgo(null), 'Nunca')
+  assert.equal(timeAgo(ago(20_000), now), 'hace un momento')
+  assert.equal(timeAgo(ago(2 * 60_000), now), 'hace 2 min')
+  assert.equal(timeAgo(ago(3 * 3_600_000), now), 'hace 3 h')
+  assert.equal(timeAgo(ago(4 * 86_400_000), now), 'hace 4 d')
+})
+
+test('etiquetas: herramientas del MCP conocidas en español, desconocidas tal cual', () => {
+  assert.equal(toolLabel('get_record'), 'Ver novedad')
+  assert.equal(toolLabel('otra_cosa'), 'otra_cosa')
+  assert.deepEqual(Object.keys(RESULT_LABELS), ['ok', 'denied', 'error'])
+})
