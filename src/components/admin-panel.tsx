@@ -3,13 +3,13 @@
 import { useState, useTransition } from 'react'
 import type { Field, Role } from '@/types'
 import type { ApiKeyDTO } from '@/lib/api/keys'
-import { ApiKeysManager } from '@/components/api-keys/api-keys-manager'
 import { CommunicationAdmin } from '@/components/email/communication-admin'
 import { EmailAdmin } from '@/components/email/email-admin'
 import { UsersTab, type AdminUser } from '@/components/admin/users-tab'
 import { PermissionsTab } from '@/components/admin/permissions-tab'
 import { AuditTab } from '@/components/admin/audit-tab'
 import { McpTab } from '@/components/admin/mcp-tab'
+import { ApiTab } from '@/components/admin/api-tab'
 
 type DBUser = AdminUser
 
@@ -92,15 +92,7 @@ export function AdminPanel({ fields, users: initialUsers, apiKeys, currentUserEm
       {tab === 'communication' && <CommunicationAdmin />}
 
       {/* API tokens tab */}
-      {tab === 'api' && (
-        <div>
-          <p style={{ fontSize: 13, color: '#718096', marginBottom: 12 }}>
-            Tokens de la API REST (<code>/api/v1</code>) de toda la organización. Cada token actúa con el rol de su dueño y limitado a sus permisos (scopes).
-            Revocar corta el acceso de inmediato. Cada usuario puede tener máximo 3 tokens activos y crear los suyos en <a href="/api-tokens" style={{ color: '#00A888' }}>/api-tokens</a>.
-          </p>
-          <ApiKeysManager initialKeys={apiKeys} mode="admin" isAdmin currentUserEmail={currentUserEmail} />
-        </div>
-      )}
+      {tab === 'api' && <ApiTab apiKeys={apiKeys} currentUserEmail={currentUserEmail} />}
     </div>
   )
 }
