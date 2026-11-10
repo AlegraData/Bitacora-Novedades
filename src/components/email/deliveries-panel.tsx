@@ -200,7 +200,8 @@ function ResendBox({ d, onResent }: { d: DeliveryDTO; onResent: () => void }) {
         setReason('')
         onResent()
       } else {
-        const missing = res.missingFields?.length ? ` Falta: ${res.missingFields.join(', ')}.` : ''
+        const fields = res.error?.missingFields ?? res.missingFields
+        const missing = fields?.length ? ` Falta: ${fields.join(', ')}.` : ''
         setMsg({ ok: false, text: `${res.error?.message ?? 'No se pudo reenviar.'}${missing}` })
       }
     } catch {

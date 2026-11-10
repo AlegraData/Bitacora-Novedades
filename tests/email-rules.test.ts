@@ -4,13 +4,14 @@ import { prisma } from '@/lib/prisma'
 import { loadRules, saveRule, getRulesState } from '@/lib/email/rules'
 import { findRule, DEFAULT_REQUIRED_FIELDS } from '@/lib/email/communication'
 import { EmailSendError } from '@/lib/email/errors'
-import { resetDb, ensureFields } from './helpers'
+import { resetDb, ensureFields, makeUser } from './helpers'
 
-const actor = { id: 'u1', email: 'tomas.lopera@alegra.com', name: 'Tomas' }
+const actor = { id: '', email: 'tomas.lopera@alegra.com', name: 'Tomas' }
 
 beforeEach(async () => {
   await resetDb()
   await ensureFields()
+  actor.id = (await makeUser('tomas.lopera@alegra.com', 'ADMIN')).id
 })
 
 async function rejects(p: Promise<unknown>, re: RegExp) {

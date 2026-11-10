@@ -4,16 +4,17 @@ import { sendNovedad } from '@/lib/email/service'
 import { saveRule } from '@/lib/email/rules'
 import { DEFAULT_REQUIRED_FIELDS, TIPO_NO_COMUNICABLE } from '@/lib/email/communication'
 import { prisma } from '@/lib/prisma'
-import { resetDb, ensureFields } from './helpers'
+import { resetDb, ensureFields, makeUser } from './helpers'
 import { clearMailbox, listMessages } from './mailpit'
 import { viewer, makeRecord, setMode } from './email-helpers'
 
-const tomas = { id: 'u1', email: 'tomas.lopera@alegra.com', name: 'Tomas' }
+const tomas = { id: '', email: 'tomas.lopera@alegra.com', name: 'Tomas' }
 const send = (id: string, trigger: 'auto' | 'manual' = 'auto') => sendNovedad({ recordId: id, actor: viewer, channel: 'web', trigger })
 
 beforeEach(async () => {
   await resetDb()
   await ensureFields()
+  tomas.id = (await makeUser('tomas.lopera@alegra.com', 'ADMIN')).id
   await clearMailbox()
   await setMode('live')
 })
@@ -34,7 +35,7 @@ test('MANUAL valida los mismos campos obligatorios antes de enviar', async () =>
   const r = await makeRecord({ tipo: 'Mejora', breveDescripcion: undefined })
   const res = await send(r.id, 'manual')
   assert.equal(res.error?.code, 'VALIDATION')
-  assert.deepEqual(res.missingFields, ['Breve descripción'])
+  assert.deepEqual(res.error?.missingFields, ['Breve descripción'])
 })
 
 test('DISABLED: ni automático ni manual', async () => {

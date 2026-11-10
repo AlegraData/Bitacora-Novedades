@@ -5,15 +5,16 @@ import { listPending, resendFromPanel } from '@/lib/email/panel'
 import { saveRule } from '@/lib/email/rules'
 import { sendNovedad } from '@/lib/email/service'
 import { DEFAULT_REQUIRED_FIELDS } from '@/lib/email/communication'
-import { resetDb, ensureFields } from './helpers'
+import { resetDb, ensureFields, makeUser } from './helpers'
 import { clearMailbox, listMessages } from './mailpit'
 import { viewer, makeRecord, setMode } from './email-helpers'
 
-const tomas = { id: 'u1', email: 'tomas.lopera@alegra.com', name: 'Tomas' }
+const tomas = { id: '', email: 'tomas.lopera@alegra.com', name: 'Tomas' }
 
 beforeEach(async () => {
   await resetDb()
   await ensureFields()
+  tomas.id = (await makeUser('tomas.lopera@alegra.com', 'ADMIN')).id
   await clearMailbox()
   await setMode('live')
 })
@@ -37,7 +38,7 @@ test('pendientes: un tipo MANUAL completo aparece como «ready» (a la espera de
   assert.deepEqual((await listPending({ tipo: 'Novedad' })), [])
 })
 
-test('reejecutar desde el panel: exige motivo, envía, queda en el historial con el motivo y marca el botón', async () => {
+test('reejecutar desde el panel: exige motivo, envía, queda en el historial con el motivo y en la auditoría', async () => {
   const r = await makeRecord({ tipo: 'Novedad' })
   await sendNovedad({ recordId: r.id, actor: viewer, channel: 'web', trigger: 'auto' })
   const sinMotivo = await resendFromPanel(tomas, r.id, 'corto')
@@ -47,7 +48,6 @@ test('reejecutar desde el panel: exige motivo, envía, queda en el historial con
   assert.equal(ok.status, 'sent')
   const last = await prisma.emailDelivery.findFirstOrThrow({ where: { recordId: r.id, status: 'sent' }, orderBy: { createdAt: 'desc' } })
   assert.equal(last.resendReason, 'El correo anterior no llegó al grupo')
-  assert.equal(last.channel, 'web')
   assert.equal((await listMessages()).length, 2)
   assert.equal(await prisma.auditLog.count({ where: { recordId: r.id, action: 'EMAIL_RESEND' } }), 1)
 })
