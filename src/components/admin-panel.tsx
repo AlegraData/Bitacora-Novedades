@@ -7,16 +7,10 @@ import type { ApiKeyDTO } from '@/lib/api/keys'
 import { ApiKeysManager } from '@/components/api-keys/api-keys-manager'
 import { CommunicationAdmin } from '@/components/email/communication-admin'
 import { EmailAdmin } from '@/components/email/email-admin'
+import { UsersTab, type AdminUser } from '@/components/admin/users-tab'
+import { PermissionsTab } from '@/components/admin/permissions-tab'
 
-interface DBUser {
-  id: string
-  email: string
-  name: string
-  image: string | null
-  role: Role
-  createdAt: string
-  updatedAt: string
-}
+type DBUser = AdminUser
 
 interface AdminPanelProps {
   fields: Field[]
@@ -65,13 +59,6 @@ export function AdminPanel({ fields, users: initialUsers, auditLogs, mcpSessions
     })
   }
 
-  const ROLES: Role[] = ['ADMIN', 'MANAGER', 'VIEWER']
-  const ROLE_COLORS: Record<Role, string> = {
-    ADMIN: '#e53e3e',
-    MANAGER: '#3182ce',
-    VIEWER: '#718096',
-  }
-
   return (
     <div style={{ maxWidth: 1100, margin: '0 auto' }}>
       <div style={{ marginBottom: 24 }}>
@@ -104,121 +91,10 @@ export function AdminPanel({ fields, users: initialUsers, auditLogs, mcpSessions
       )}
 
       {/* Users tab */}
-      {tab === 'users' && (
-        <div style={{ background: '#fff', borderRadius: 12, boxShadow: '0 2px 8px rgba(0,0,0,0.06)', overflow: 'hidden' }}>
-          <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-            <thead>
-              <tr style={{ background: '#1e2a3a' }}>
-                {['Usuario', 'Email', 'Rol', 'Miembro desde'].map((h) => (
-                  <th key={h} style={{ padding: '10px 16px', textAlign: 'left', fontSize: 12, fontWeight: 600, color: '#a0aec0' }}>{h}</th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {users.map((u) => (
-                <tr key={u.id} style={{ borderBottom: '1px solid #f0f4f8' }}>
-                  <td style={{ padding: '12px 16px' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                      <div style={{
-                        width: 32, height: 32, borderRadius: '50%',
-                        background: '#00C4A0', display: 'flex',
-                        alignItems: 'center', justifyContent: 'center',
-                        fontSize: 13, fontWeight: 600, color: '#fff', overflow: 'hidden',
-                      }}>
-                        {u.image
-                          ? <img src={u.image} alt={u.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                          : u.name.charAt(0).toUpperCase()
-                        }
-                      </div>
-                      <span style={{ fontSize: 14, fontWeight: 500, color: '#1a202c' }}>{u.name}</span>
-                    </div>
-                  </td>
-                  <td style={{ padding: '12px 16px', fontSize: 13, color: '#718096' }}>{u.email}</td>
-                  <td style={{ padding: '12px 16px' }}>
-                    <select
-                      value={u.role}
-                      onChange={(e) => handleRoleChange(u.id, e.target.value as Role)}
-                      style={{
-                        padding: '5px 10px',
-                        border: `1.5px solid ${ROLE_COLORS[u.role]}`,
-                        borderRadius: 20,
-                        fontSize: 12, fontWeight: 600,
-                        color: ROLE_COLORS[u.role],
-                        background: '#fff',
-                        cursor: 'pointer',
-                        outline: 'none',
-                      }}
-                    >
-                      {ROLES.map((r) => <option key={r} value={r}>{r}</option>)}
-                    </select>
-                  </td>
-                  <td style={{ padding: '12px 16px', fontSize: 13, color: '#718096' }}>
-                    {new Date(u.createdAt).toLocaleDateString('es-CO')}
-                  </td>
-                </tr>
-              ))}
-              {users.length === 0 && (
-                <tr>
-                  <td colSpan={4} style={{ padding: '40px', textAlign: 'center', color: '#a0aec0' }}>
-                    No hay usuarios registrados aún.
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
-      )}
+      {tab === 'users' && <UsersTab users={users} onRoleChange={handleRoleChange} />}
 
       {/* Permissions tab */}
-      {tab === 'permissions' && (
-        <div style={{ background: '#fff', borderRadius: 12, boxShadow: '0 2px 8px rgba(0,0,0,0.06)', overflow: 'hidden' }}>
-          <div style={{ padding: '16px 20px', borderBottom: '1px solid #e2e8f0' }}>
-            <p style={{ fontSize: 13, color: '#718096' }}>
-              Controla qué roles pueden editar cada campo. Si no hay permiso definido, el comportamiento por defecto aplica (ADMIN y MANAGER pueden editar, VIEWER solo visualiza).
-            </p>
-          </div>
-          <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-            <thead>
-              <tr style={{ background: '#1e2a3a' }}>
-                <th style={{ padding: '10px 16px', textAlign: 'left', fontSize: 12, fontWeight: 600, color: '#a0aec0' }}>Campo</th>
-                <th style={{ padding: '10px 16px', textAlign: 'left', fontSize: 12, fontWeight: 600, color: '#a0aec0' }}>Tipo</th>
-                {ROLES.map((r) => (
-                  <th key={r} style={{ padding: '10px 16px', textAlign: 'center', fontSize: 12, fontWeight: 600, color: ROLE_COLORS[r] }}>{r}</th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {fields.filter(f => f.type !== 'button').map((field) => (
-                <tr key={field.id} style={{ borderBottom: '1px solid #f0f4f8' }}>
-                  <td style={{ padding: '12px 16px', fontSize: 14, fontWeight: 500, color: '#1a202c' }}>{field.name}</td>
-                  <td style={{ padding: '12px 16px', fontSize: 12, color: '#718096' }}>{field.type}</td>
-                  {ROLES.map((role) => {
-                    const perm = field.permissions.find((p) => p.role === role)
-                    const canEdit = perm ? perm.canEdit : (role === 'ADMIN' || role === 'MANAGER')
-                    return (
-                      <td key={role} style={{ padding: '12px 16px', textAlign: 'center' }}>
-                        <input
-                          type="checkbox"
-                          checked={canEdit}
-                          onChange={(e) => handlePermissionChange(field.id, role, e.target.checked)}
-                          style={{ width: 18, height: 18, accentColor: '#00C4A0', cursor: 'pointer' }}
-                        />
-                      </td>
-                    )
-                  })}
-                </tr>
-              ))}
-              {fields.length === 0 && (
-                <tr>
-                  <td colSpan={5} style={{ padding: '40px', textAlign: 'center', color: '#a0aec0' }}>
-                    No hay campos configurados aún.
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
-      )}
+      {tab === 'permissions' && <PermissionsTab fields={fields} onChange={handlePermissionChange} />}
 
       {/* Audit tab */}
       {tab === 'audit' && (
