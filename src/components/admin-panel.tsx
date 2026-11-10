@@ -5,6 +5,7 @@ import type { Field, AuditLog, Role } from '@/types'
 import type { McpSession } from '@/lib/actions/mcp-sessions'
 import type { ApiKeyDTO } from '@/lib/api/keys'
 import { ApiKeysManager } from '@/components/api-keys/api-keys-manager'
+import { CommunicationAdmin } from '@/components/email/communication-admin'
 import { EmailAdmin } from '@/components/email/email-admin'
 
 interface DBUser {
@@ -29,7 +30,7 @@ interface AdminPanelProps {
   onRevokeMcpSession: (sessionId: string) => Promise<void>
 }
 
-type Tab = 'users' | 'permissions' | 'audit' | 'mcp' | 'api' | 'email'
+type Tab = 'users' | 'permissions' | 'audit' | 'mcp' | 'api' | 'email' | 'communication'
 
 function mcpStatus(refreshExpiresAt: string): { label: string; bg: string; color: string } {
   const msLeft = new Date(refreshExpiresAt).getTime() - Date.now()
@@ -80,7 +81,7 @@ export function AdminPanel({ fields, users: initialUsers, auditLogs, mcpSessions
 
       {/* Tabs */}
       <div style={{ display: 'flex', gap: 4, marginBottom: 24, background: '#fff', padding: 4, borderRadius: 10, boxShadow: '0 2px 8px rgba(0,0,0,0.06)', width: 'fit-content' }}>
-        {([['users', '👥 Usuarios'], ['permissions', '🔐 Permisos de campos'], ['audit', '📋 Auditoría'], ['mcp', '🔌 Conexiones MCP'], ['api', '🔑 API Tokens'], ['email', '✉️ Correos']] as [Tab, string][]).map(([key, label]) => (
+        {([['users', '👥 Usuarios'], ['permissions', '🔐 Permisos de campos'], ['audit', '📋 Auditoría'], ['mcp', '🔌 Conexiones MCP'], ['api', '🔑 API Tokens'], ['email', '✉️ Correos'], ['communication', '📨 Comunicación']] as [Tab, string][]).map(([key, label]) => (
           <button
             key={key}
             onClick={() => setTab(key)}
@@ -348,6 +349,9 @@ export function AdminPanel({ fields, users: initialUsers, auditLogs, mcpSessions
 
       {/* Email tab */}
       {tab === 'email' && <EmailAdmin />}
+
+      {/* Communication rules tab */}
+      {tab === 'communication' && <CommunicationAdmin />}
 
       {/* API tokens tab */}
       {tab === 'api' && (
