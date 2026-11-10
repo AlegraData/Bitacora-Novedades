@@ -3,7 +3,7 @@ import { LOGICAL_FIELD_NAMES } from '@/lib/mcp/fields'
 
 export async function resetDb() {
   await prisma.$executeRawUnsafe(
-    'TRUNCATE TABLE "EmailDelivery", "CommunicationRule", "EmailTemplateRevision", "EmailTemplate", "EmailSettings", "ApiRequestLog", "ApiKey", "AuditLog", "RecordEmbedding", "Record", "User" RESTART IDENTITY CASCADE'
+    'TRUNCATE TABLE "EmailDelivery", "McpToolCall", "CommunicationRule", "EmailTemplateRevision", "EmailTemplate", "EmailSettings", "ApiRequestLog", "ApiKey", "AuditLog", "RecordEmbedding", "Record", "User" RESTART IDENTITY CASCADE'
   )
 }
 

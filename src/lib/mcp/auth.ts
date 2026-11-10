@@ -9,6 +9,8 @@ export interface Caller {
   role: Role
   /** Presente cuando el request llegó por la API REST con un token (en vez de MCP/OAuth). */
   via?: { channel: 'api'; apiKeyId: string; apiKeyName: string }
+  /** Sesión OAuth del MCP (solo en llamadas por MCP): sirve para saber con qué agente se conectó. */
+  session?: { id: string; clientName: string | null }
 }
 
 export async function resolveCaller(request: NextRequest): Promise<Caller | null> {
@@ -34,5 +36,5 @@ export async function resolveCaller(request: NextRequest): Promise<Caller | null
     .update({ where: { id: session.id }, data: { lastUsedAt: new Date() } })
     .catch(() => {})
 
-  return { id: user.id, email: user.email, name: user.name, role: user.role as Role }
+  return { id: user.id, email: user.email, name: user.name, role: user.role as Role, session: { id: session.id, clientName: session.clientName } }
 }

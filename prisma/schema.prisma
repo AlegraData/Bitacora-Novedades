@@ -142,6 +142,27 @@ model OAuthSession {
   @@index([userEmail])
 }
 
+// Una fila por llamada a una herramienta del MCP (qué persona, con qué agente, qué herramienta y cómo terminó).
+// Alimenta el dashboard «Conexiones MCP» del admin. Nunca se guarda el contenido de la respuesta ni los argumentos.
+model McpToolCall {
+  id           String   @id @default(cuid())
+  timestamp    DateTime @default(now())
+  userEmail    String
+  sessionId    String?
+  clientName   String?
+  // Claude | Claude Code | opencode | Otro agente (deducido del nombre del cliente; es informativo)
+  agent        String
+  tool         String
+  recordId     String?
+  // ok | denied | error
+  status       String
+  errorMessage String?
+  durationMs   Int
+
+  @@index([timestamp])
+  @@index([userEmail, timestamp])
+}
+
 // Tokens de acceso a la API REST (/api/v1). Del token solo se guarda el hash
 // SHA-256; el valor en claro se muestra una única vez al crearlo.
 model ApiKey {

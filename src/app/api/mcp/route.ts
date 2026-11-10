@@ -3,6 +3,7 @@ import { oauthCorsHeaders } from '@/lib/oauth/cors'
 import { publicOrigin, wwwAuthenticate } from '@/lib/oauth/metadata'
 import { resolveCaller, type Caller } from '@/lib/mcp/auth'
 import { addAuditLog } from '@/lib/actions/audit'
+import { logToolCall, statusOfResult } from '@/lib/mcp/call-log'
 import {
   TOOLS,
   handleListRecords,
@@ -118,8 +119,12 @@ export async function POST(request: NextRequest) {
       return jsonRpcError(id, -32601, `Tool "${toolName}" not found`)
     }
 
+    const startedAt = Date.now()
+
     if (tool.requiredRole && caller.role !== tool.requiredRole) {
-      return jsonRpcResult(id, toolTextResult({ error: `Esta acción requiere rol ${tool.requiredRole}.` }))
+      const message = `Esta acción requiere rol ${tool.requiredRole}.`
+      await logToolCall({ caller, tool: String(toolName), args: toolArgs, status: 'denied', errorMessage: message, durationMs: Date.now() - startedAt })
+      return jsonRpcResult(id, toolTextResult({ error: message }))
     }
 
     try {
@@ -157,10 +162,13 @@ export async function POST(request: NextRequest) {
       }
 
       await logMcpRead(toolName, toolArgs, caller)
+      const outcome = statusOfResult(result)
+      await logToolCall({ caller, tool: String(toolName), args: toolArgs, status: outcome.status, errorMessage: outcome.message, durationMs: Date.now() - startedAt })
 
       return jsonRpcResult(id, toolTextResult(result))
     } catch (error) {
       console.error(`Error ejecutando tool "${toolName}":`, error)
+      await logToolCall({ caller, tool: String(toolName), args: toolArgs, status: 'error', errorMessage: 'Internal tool error', durationMs: Date.now() - startedAt })
       return jsonRpcError(id, -32000, 'Internal tool error')
     }
   }
