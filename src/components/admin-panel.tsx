@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useTransition } from 'react'
-import type { Field, AuditLog, Role } from '@/types'
+import type { Field, Role } from '@/types'
 import type { McpSession } from '@/lib/actions/mcp-sessions'
 import type { ApiKeyDTO } from '@/lib/api/keys'
 import { ApiKeysManager } from '@/components/api-keys/api-keys-manager'
@@ -9,13 +9,13 @@ import { CommunicationAdmin } from '@/components/email/communication-admin'
 import { EmailAdmin } from '@/components/email/email-admin'
 import { UsersTab, type AdminUser } from '@/components/admin/users-tab'
 import { PermissionsTab } from '@/components/admin/permissions-tab'
+import { AuditTab } from '@/components/admin/audit-tab'
 
 type DBUser = AdminUser
 
 interface AdminPanelProps {
   fields: Field[]
   users: DBUser[]
-  auditLogs: AuditLog[]
   mcpSessions: McpSession[]
   apiKeys: ApiKeyDTO[]
   currentUserEmail: string
@@ -33,7 +33,7 @@ function mcpStatus(refreshExpiresAt: string): { label: string; bg: string; color
   return { label: 'Activa', bg: '#c6f6d5', color: '#276749' }
 }
 
-export function AdminPanel({ fields, users: initialUsers, auditLogs, mcpSessions: initialMcpSessions, apiKeys, currentUserEmail, onUpdateUserRole, onSaveFieldPermission, onRevokeMcpSession }: AdminPanelProps) {
+export function AdminPanel({ fields, users: initialUsers, mcpSessions: initialMcpSessions, apiKeys, currentUserEmail, onUpdateUserRole, onSaveFieldPermission, onRevokeMcpSession }: AdminPanelProps) {
   const [tab, setTab] = useState<Tab>('users')
   const [users, setUsers] = useState<DBUser[]>(initialUsers)
   const [mcpSessions, setMcpSessions] = useState<McpSession[]>(initialMcpSessions)
@@ -97,51 +97,7 @@ export function AdminPanel({ fields, users: initialUsers, auditLogs, mcpSessions
       {tab === 'permissions' && <PermissionsTab fields={fields} onChange={handlePermissionChange} />}
 
       {/* Audit tab */}
-      {tab === 'audit' && (
-        <div style={{ background: '#fff', borderRadius: 12, boxShadow: '0 2px 8px rgba(0,0,0,0.06)', overflow: 'hidden' }}>
-          <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-            <thead>
-              <tr style={{ background: '#1e2a3a' }}>
-                {['Fecha', 'Usuario', 'Acción', 'Registro ID'].map((h) => (
-                  <th key={h} style={{ padding: '10px 16px', textAlign: 'left', fontSize: 12, fontWeight: 600, color: '#a0aec0' }}>{h}</th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {auditLogs.map((log) => (
-                <tr key={log.id} style={{ borderBottom: '1px solid #f0f4f8' }}>
-                  <td style={{ padding: '10px 16px', fontSize: 12, color: '#718096', whiteSpace: 'nowrap' }}>
-                    {new Date(log.timestamp).toLocaleString('es-CO')}
-                  </td>
-                  <td style={{ padding: '10px 16px', fontSize: 13 }}>
-                    <div style={{ fontWeight: 500, color: '#1a202c' }}>{log.userName}</div>
-                    <div style={{ fontSize: 11, color: '#a0aec0' }}>{log.userEmail}</div>
-                  </td>
-                  <td style={{ padding: '10px 16px' }}>
-                    <span style={{
-                      padding: '3px 8px', borderRadius: 4, fontSize: 11, fontWeight: 600,
-                      background: log.action.includes('CREATED') ? '#c6f6d5' : log.action.includes('DELETED') ? '#fed7d7' : '#bee3f8',
-                      color: log.action.includes('CREATED') ? '#276749' : log.action.includes('DELETED') ? '#9b2c2c' : '#2c5282',
-                    }}>
-                      {log.action}
-                    </span>
-                  </td>
-                  <td style={{ padding: '10px 16px', fontSize: 11, color: '#a0aec0', fontFamily: 'monospace' }}>
-                    {log.recordId ?? '—'}
-                  </td>
-                </tr>
-              ))}
-              {auditLogs.length === 0 && (
-                <tr>
-                  <td colSpan={4} style={{ padding: '40px', textAlign: 'center', color: '#a0aec0' }}>
-                    Sin registros de auditoría.
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
-      )}
+      {tab === 'audit' && <AuditTab />}
 
       {/* MCP connections tab */}
       {tab === 'mcp' && (
