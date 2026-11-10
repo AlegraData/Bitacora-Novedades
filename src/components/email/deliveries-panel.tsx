@@ -4,7 +4,8 @@ import { useCallback, useEffect, useState } from 'react'
 import type { DeliveryDTO } from '@/lib/email/history'
 import type { ShadowComparison } from '@/lib/email/admin-tools'
 import { ERROR_TITLES, type EmailErrorCode } from '@/lib/email/errors'
-import { listEmailDeliveriesAdmin, getEmailDeliveryDetail, getEmailShadowComparison } from '@/lib/actions/email-admin'
+import { MIN_RESEND_REASON, MAX_RESEND_REASON } from '@/lib/email/communication'
+import { listEmailDeliveriesAdmin, getEmailDeliveryDetail, getEmailShadowComparison, resendNovedadFromPanel } from '@/lib/actions/email-admin'
 
 const card = { background: '#fff', borderRadius: 12, boxShadow: '0 2px 8px rgba(0,0,0,0.06)', padding: '16px 18px', marginBottom: 16 } as const
 const th = { padding: '8px 10px', textAlign: 'left', fontSize: 12, fontWeight: 600, color: '#a0aec0' } as const
@@ -94,7 +95,7 @@ export function DeliveriesPanel() {
         )}
       </div>
 
-      {detail && <DeliveryDetail d={detail} onClose={() => setDetail(null)} />}
+      {detail && <DeliveryDetail d={detail} onClose={() => setDetail(null)} onResent={load} />}
     </div>
   )
 }
@@ -136,7 +137,7 @@ function ShadowSection({ shadow, onOpen }: { shadow: ShadowComparison; onOpen: (
   )
 }
 
-export function DeliveryDetail({ d, onClose }: { d: DeliveryDTO; onClose: () => void }) {
+export function DeliveryDetail({ d, onClose, onResent }: { d: DeliveryDTO; onClose: () => void; onResent?: () => void }) {
   const rows: [string, React.ReactNode][] = [
     ['Estado', <StatusChip key="s" status={d.status} />],
     ['Modo', MODES[d.mode] ?? d.mode],
@@ -167,12 +168,65 @@ export function DeliveryDetail({ d, onClose }: { d: DeliveryDTO; onClose: () => 
             <div style={{ flex: 1, color: '#1e293b', wordBreak: 'break-word' }}>{v}</div>
           </div>
         ))}
+        {onResent && <ResendBox d={d} onResent={onResent} />}
         {d.html && (
           <>
             <div style={{ fontSize: 12, color: '#64748b', margin: '12px 0 4px' }}>Correo renderizado</div>
             <iframe title="Correo del envío" sandbox="" srcDoc={d.html} style={{ width: '100%', height: 480, border: '1px solid #e2e8f0', borderRadius: 8 }} />
           </>
         )}
+      </div>
+    </div>
+  )
+}
+
+/** Volver a ejecutar un envío (fallido o ya enviado): exige un motivo, que queda en el historial y en la auditoría. */
+function ResendBox({ d, onResent }: { d: DeliveryDTO; onResent: () => void }) {
+  const [reason, setReason] = useState('')
+  const [busy, setBusy] = useState(false)
+  const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null)
+
+  // Solo envíos reales de una novedad: los simulacros y las pruebas no se reejecutan.
+  if (!d.recordId || !['sent', 'failed'].includes(d.status) || ['simulate', 'test'].includes(d.mode)) return null
+  const valid = reason.trim().length >= MIN_RESEND_REASON && reason.trim().length <= MAX_RESEND_REASON
+
+  async function run() {
+    setBusy(true)
+    setMsg(null)
+    try {
+      const res = await resendNovedadFromPanel(d.recordId!, reason)
+      if (res.status === 'sent') {
+        setMsg({ ok: true, text: 'Reenviado. Quedó en el historial con el motivo.' })
+        setReason('')
+        onResent()
+      } else {
+        const missing = res.missingFields?.length ? ` Falta: ${res.missingFields.join(', ')}.` : ''
+        setMsg({ ok: false, text: `${res.error?.message ?? 'No se pudo reenviar.'}${missing}` })
+      }
+    } catch {
+      setMsg({ ok: false, text: 'No se pudo reenviar. Intenta de nuevo.' })
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <div style={{ marginTop: 14, padding: 12, border: '1px solid #e2e8f0', borderRadius: 8, background: '#f8fafc' }}>
+      <div style={{ fontSize: 12, fontWeight: 700, color: '#1e293b', marginBottom: 6 }}>↺ Volver a ejecutar este envío</div>
+      <textarea
+        value={reason}
+        onChange={(e) => setReason(e.target.value)}
+        maxLength={MAX_RESEND_REASON}
+        rows={2}
+        placeholder={`Motivo (obligatorio, mínimo ${MIN_RESEND_REASON} caracteres). Ej.: «El correo anterior no llegó al grupo»`}
+        aria-label="Motivo del reenvío"
+        style={{ width: '100%', boxSizing: 'border-box', padding: 8, border: '1px solid #cbd5e1', borderRadius: 8, fontSize: 12, fontFamily: 'inherit' }}
+      />
+      <div style={{ display: 'flex', gap: 10, alignItems: 'center', marginTop: 8 }}>
+        <button onClick={run} disabled={!valid || busy} style={{ ...sel, background: '#1e2a3a', color: '#fff', border: 'none', fontWeight: 600, cursor: !valid || busy ? 'default' : 'pointer', opacity: !valid || busy ? 0.5 : 1 }}>
+          {busy ? 'Enviando…' : 'Reenviar con este motivo'}
+        </button>
+        {msg && <span role="status" style={{ fontSize: 12, color: msg.ok ? '#166534' : '#991b1b' }}>{msg.text}</span>}
       </div>
     </div>
   )
