@@ -16,8 +16,9 @@ test('cada server action de email-admin exige ADMIN antes de hacer nada', () => 
 
 test('la pestaña «Comunicación» está en el panel de administrador (que solo abre un ADMIN)', () => {
   const panel = readFileSync(join(process.cwd(), 'src/components/admin-panel.tsx'), 'utf8')
-  assert.match(panel, /\['communication', '📨 Comunicación'\]/)
   assert.match(panel, /tab === 'communication' && <CommunicationAdmin \/>/)
+  const tabs = readFileSync(join(process.cwd(), 'src/lib/admin/tabs.ts'), 'utf8')
+  assert.match(tabs, /communication: 'Comunicación'/)
   const page = readFileSync(join(process.cwd(), 'src/app/admin/page.tsx'), 'utf8')
   assert.match(page, /role !== 'ADMIN'\) redirect\('\/app'\)/)
 })
