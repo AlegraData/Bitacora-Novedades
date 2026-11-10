@@ -5,6 +5,7 @@ import { getFields } from '@/lib/actions/fields'
 import { getTags } from '@/lib/actions/tags'
 import { getRecords } from '@/lib/actions/records'
 import { getViews } from '@/lib/actions/views'
+import { loadRules } from '@/lib/email/rules'
 import { Navbar } from '@/components/navbar'
 import { RecordsTable } from '@/components/records-table'
 
@@ -22,13 +23,14 @@ export default async function AppPage({
 
   if (!user) redirect('/auth/login')
 
-  const [{ record: initialRecordId }, userProfile, fields, tags, records, views] = await Promise.all([
+  const [{ record: initialRecordId }, userProfile, fields, tags, records, views, communicationRules] = await Promise.all([
     searchParams,
     getCurrentUserProfile(),
     getFields(),
     getTags(),
     getRecords(),
     getViews(),
+    loadRules(),
   ])
 
   if (!userProfile) redirect('/auth/login')
@@ -54,6 +56,7 @@ export default async function AppPage({
           userName={safeName}
           views={views}
           initialRecordId={initialRecordId}
+          communicationRules={communicationRules}
         />
       </div>
     </div>

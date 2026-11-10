@@ -9,6 +9,7 @@ import { sendRecordEmail } from '@/lib/actions/email'
 import { EmailResultBanner, EmailPreviewModal, ResendDialog } from '@/components/email/email-panels'
 import type { SendResult } from '@/lib/email/service'
 import { PendingChip, pendingFor } from '@/components/email/communication-status'
+import type { CommunicationRule } from '@/lib/email/communication'
 import { saveView, deleteView } from '@/lib/actions/views'
 import { RecordEditor } from './record-editor'
 import { RecordDetail } from './record-detail'
@@ -315,6 +316,8 @@ interface RecordsTableProps {
   userName: string
   views: View[]
   initialRecordId?: string
+  /** Reglas de comunicación por tipo (las configura el admin). */
+  communicationRules?: CommunicationRule[]
 }
 
 function ButtonCell({ done, missing, sending, onSend, onPreview }: {
@@ -359,6 +362,7 @@ export function RecordsTable({
   userName,
   views: initialViews,
   initialRecordId,
+  communicationRules,
 }: RecordsTableProps) {
   const [fields_, setFields] = useState<Field[]>(fields)
   const [records, setRecords] = useState<BitacoraRecord[]>(initialRecords)
@@ -1163,13 +1167,13 @@ export function RecordsTable({
                       const isLastSticky = i === pinnedFields.length - 1
                       return (
                         <td key={field.id} style={{ ...tdStyle, position: 'sticky', left: stickyLefts[fixedCount + i] ?? 0, zIndex: 2, background: stickyBg, boxShadow: isLastSticky ? '4px 0 8px -2px rgba(0,196,160,0.25)' : undefined }}>
-                          {field.type === 'button' ? <ButtonCell done={Boolean(record.data[field.id])} missing={pendingFor(record.data, fields_, record.createdAt, Boolean(record.data[field.id]))} sending={sendingId === record.id} onSend={() => handleTriggerButton(record, field)} onPreview={() => handleTriggerButton(record, field, { simulate: true })} /> : field.id === titleFieldId ? <TitleCell record={record} field={field} onClick={() => setDetailRecord(record)} /> : <CellValue field={field} value={record.data[field.id]} allTags={tags} />}
+                          {field.type === 'button' ? <ButtonCell done={Boolean(record.data[field.id])} missing={pendingFor(record.data, fields_, record.createdAt, Boolean(record.data[field.id]), communicationRules)} sending={sendingId === record.id} onSend={() => handleTriggerButton(record, field)} onPreview={() => handleTriggerButton(record, field, { simulate: true })} /> : field.id === titleFieldId ? <TitleCell record={record} field={field} onClick={() => setDetailRecord(record)} /> : <CellValue field={field} value={record.data[field.id]} allTags={tags} />}
                         </td>
                       )
                     })}
                     {nonPinnedFields.map((field) => (
                       <td key={field.id} style={{ ...tdStyle }}>
-                        {field.type === 'button' ? <ButtonCell done={Boolean(record.data[field.id])} missing={pendingFor(record.data, fields_, record.createdAt, Boolean(record.data[field.id]))} sending={sendingId === record.id} onSend={() => handleTriggerButton(record, field)} onPreview={() => handleTriggerButton(record, field, { simulate: true })} /> : field.id === titleFieldId ? <TitleCell record={record} field={field} onClick={() => setDetailRecord(record)} /> : <CellValue field={field} value={record.data[field.id]} allTags={tags} />}
+                        {field.type === 'button' ? <ButtonCell done={Boolean(record.data[field.id])} missing={pendingFor(record.data, fields_, record.createdAt, Boolean(record.data[field.id]), communicationRules)} sending={sendingId === record.id} onSend={() => handleTriggerButton(record, field)} onPreview={() => handleTriggerButton(record, field, { simulate: true })} /> : field.id === titleFieldId ? <TitleCell record={record} field={field} onClick={() => setDetailRecord(record)} /> : <CellValue field={field} value={record.data[field.id]} allTags={tags} />}
                       </td>
                     ))}
                   </tr>
@@ -1187,6 +1191,7 @@ export function RecordsTable({
           fields={fields_}
           tags={tags}
           userRole={userRole}
+          communicationRules={communicationRules}
           onSave={async (data) => {
             await handleSaveRecord(data)
             setDetailRecord((prev) => prev ? { ...prev, data: data.recordData } : null)

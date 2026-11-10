@@ -8,6 +8,7 @@ import { sendRecordEmail } from '@/lib/actions/email'
 import { EmailResultBanner, EmailPreviewModal, EmailHistory, ResendDialog } from '@/components/email/email-panels'
 import type { SendResult } from '@/lib/email/service'
 import { CommunicationStatus } from '@/components/email/communication-status'
+import type { CommunicationRule } from '@/lib/email/communication'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 
@@ -28,9 +29,11 @@ interface RecordDetailProps {
   onSave: (data: { id: string; recordData: RecordData }) => Promise<void>
   onClose: () => void
   onDelete?: () => Promise<void>
+  /** Reglas de comunicación por tipo (las configura el admin). */
+  communicationRules?: CommunicationRule[]
 }
 
-export function RecordDetail({ record, fields, tags, userRole, onSave, onClose, onDelete }: RecordDetailProps) {
+export function RecordDetail({ record, fields, tags, userRole, onSave, onClose, onDelete, communicationRules }: RecordDetailProps) {
   const [formData, setFormData] = useState<RecordData>(record.data)
   const [blocks, setBlocks] = useState<Block[]>(() => {
     const raw = record.data['__blocks__']
@@ -406,7 +409,7 @@ export function RecordDetail({ record, fields, tags, userRole, onSave, onClose, 
                 </span>
                 <div style={{ flex: 1, height: 1, background: '#e2e8f0' }} />
               </div>
-              <CommunicationStatus data={formData} fields={fields} createdAt={record.createdAt} done={buttonFields.some((f) => Boolean(formData[f.id]))} />
+              <CommunicationStatus data={formData} fields={fields} createdAt={record.createdAt} done={buttonFields.some((f) => Boolean(formData[f.id]))} rules={communicationRules} />
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12 }}>
                 {buttonFields.map((field) => {
                   const executed = Boolean(formData[field.id])

@@ -72,3 +72,19 @@ test('los formularios ya no ocultan ni rellenan con N/A campos según el tipo (t
     }
   }
 })
+
+// ---------- reglas por tipo (TMDIAPD-65) ----------
+
+test('con reglas del admin: MANUAL muestra pendiente y lo explica; DISABLED no muestra nada; el criterio es el de la regla', () => {
+  const rules = [
+    { tipo: 'Experimento', mode: 'MANUAL' as const, requiredFields: ['titulo', 'producto'], autoSince: null },
+    { tipo: 'Normativa', mode: 'DISABLED' as const, requiredFields: ['titulo'], autoSince: null },
+  ]
+  const data = { ...complete, ti: 'Experimento', d: '' }
+  assert.deepEqual(pendingFor(data, fields, after, false, rules), ['Producto'])
+  const h = html(<CommunicationStatus data={data} fields={fields} createdAt={after} done={false} rules={rules} />)
+  assert.ok(h.includes('Pendiente de comunicar') && h.includes('solo de forma manual'))
+  assert.equal(pendingFor({ ...complete, ti: 'Normativa', d: '' }, fields, after, false, rules), null)
+  // un registro anterior al corte sigue pendiente a mano en MANUAL (el corte solo frena el envío automático)
+  assert.deepEqual(pendingFor(data, fields, before, false, rules), ['Producto'])
+})
