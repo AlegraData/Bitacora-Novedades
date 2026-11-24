@@ -159,3 +159,16 @@ en Cloud Run, importación del historial y errores: [docs/EMAIL_MIGRATION.md](do
 Tablas nuevas (aditivas): requieren `npx prisma db push` en producción.
 
 Variables de Chat/menciones (TMDIAPD-56): `IT_HUB_URL` e `IT_HUB_API_KEY` (secreto) para resolver el ID de Chat de cada destinatario, y opcional `PMKT_CHAT_TEST_WEBHOOK_URL` (espacio de pruebas para el mensaje de prueba). Ver el final de [docs/EMAIL_MIGRATION.md](docs/EMAIL_MIGRATION.md).
+
+## Trazas del MCP en Phoenix
+
+Cada llamada al MCP va también a Phoenix, a la par de **Admin → Conexiones MCP**, que no cambia. Con
+`MCP_CAPTURE_CONVERSATION=true`, Phoenix muestra también la pregunta del usuario y la respuesta final del agente.
+
+- **Variables:** `PHOENIX_COLLECTOR_ENDPOINT`, `PHOENIX_API_KEY` (secreto `bitacora-phoenix-api-key`),
+  `PHOENIX_PROJECT_NAME`, `PHOENIX_CAPTURE_MODE`, `MCP_CAPTURE_CONVERSATION` y `MCP_REQUIRE_QUESTION`.
+- **Sin configurar,** el MCP funciona igual y sin trazas.
+- **Sin cambios de base de datos.**
+
+Qué sale y qué no, configuración en Cloud Run, verificación y rotación de la llave:
+[docs/PHOENIX.md](docs/PHOENIX.md).

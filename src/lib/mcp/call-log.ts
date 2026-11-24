@@ -8,6 +8,13 @@ export type CallStatus = 'ok' | 'denied' | 'error'
 export function statusOfResult(result: unknown): { status: CallStatus; message: string | null } {
   const err = (result as { error?: unknown } | null)?.error
   if (err === undefined || err === null || err === false) return { status: 'ok', message: null }
+  // Los errores del envío de correo (notify_pmkt) son objetos { code, message }: se guarda
+  // «CÓDIGO: mensaje» (antes quedaba «[object Object]») y solo FORBIDDEN cuenta como denegada.
+  if (typeof err === 'object') {
+    const { code, message } = err as { code?: unknown; message?: unknown }
+    const text = [code, message].filter((v): v is string => typeof v === 'string' && v.length > 0).join(': ') || 'Error'
+    return { status: code === 'FORBIDDEN' ? 'denied' : 'error', message: text.slice(0, 300) }
+  }
   const message = String(err).slice(0, 300)
   return { status: /permiso|rol |requiere|no autorizad|solo (puede|un)|forbidden/i.test(message) ? 'denied' : 'error', message }
 }

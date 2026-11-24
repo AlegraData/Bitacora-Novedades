@@ -10,6 +10,8 @@ export const MCP_TOOL_LABELS: Record<string, string> = {
   notify_pmkt: 'Comunicar a PMKT',
   list_audit_log: 'Ver auditoría',
   list_email_deliveries: 'Ver envíos de correo',
+  // Solo con MCP_CAPTURE_CONVERSATION=true: el agente registra su respuesta final (va a Phoenix, no a la base).
+  registrar_respuesta: 'Registrar respuesta',
 }
 
 export const toolLabel = (tool: string) => MCP_TOOL_LABELS[tool] ?? tool

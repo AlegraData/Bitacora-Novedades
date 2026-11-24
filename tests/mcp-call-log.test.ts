@@ -23,6 +23,16 @@ test('statusOfResult: sin error = ok; permisos = denegada; cualquier otro error 
   assert.equal(statusOfResult({ error: 'El campo titulo es obligatorio' }).status, 'error')
 })
 
+test('statusOfResult: los errores del envío ({ code, message }) se guardan legibles; solo FORBIDDEN es denegada', () => {
+  assert.deepEqual(statusOfResult({ ok: false, status: 'failed', error: { code: 'NOT_FOUND', message: 'Registro "x" no encontrado.' } }), {
+    status: 'error',
+    message: 'NOT_FOUND: Registro "x" no encontrado.',
+  })
+  assert.equal(statusOfResult({ error: { code: 'FORBIDDEN', message: 'Sin permiso' } }).status, 'denied')
+  assert.equal(statusOfResult({ error: { code: 'VALIDATION', message: 'Se requiere el video' } }).status, 'error', 'el texto no la vuelve denegada')
+  assert.deepEqual(statusOfResult({ error: {} }), { status: 'error', message: 'Error' })
+})
+
 beforeEach(async () => {
   await resetDb()
   await prisma.oAuthSession.deleteMany()
